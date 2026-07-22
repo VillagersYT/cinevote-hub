@@ -14,16 +14,234 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      poll_options: {
+        Row: {
+          backdrop_path: string | null
+          created_at: string
+          id: string
+          original_title: string | null
+          overview: string | null
+          poster_path: string | null
+          proposer_name: string | null
+          proposer_voter_id: string | null
+          release_year: number | null
+          runtime: number | null
+          screening_id: string
+          title: string
+          tmdb_id: number
+        }
+        Insert: {
+          backdrop_path?: string | null
+          created_at?: string
+          id?: string
+          original_title?: string | null
+          overview?: string | null
+          poster_path?: string | null
+          proposer_name?: string | null
+          proposer_voter_id?: string | null
+          release_year?: number | null
+          runtime?: number | null
+          screening_id: string
+          title: string
+          tmdb_id: number
+        }
+        Update: {
+          backdrop_path?: string | null
+          created_at?: string
+          id?: string
+          original_title?: string | null
+          overview?: string | null
+          poster_path?: string | null
+          proposer_name?: string | null
+          proposer_voter_id?: string | null
+          release_year?: number | null
+          runtime?: number | null
+          screening_id?: string
+          title?: string
+          tmdb_id?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "poll_options_screening_id_fkey"
+            columns: ["screening_id"]
+            isOneToOne: false
+            referencedRelation: "screenings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      screenings: {
+        Row: {
+          allow_public_proposals: boolean
+          cover_url: string | null
+          created_at: string
+          description: string | null
+          id: string
+          location: string | null
+          max_proposals_per_voter: number
+          poll_closes_at: string | null
+          poll_opens_at: string | null
+          scheduled_at: string | null
+          status: string
+          title: string
+          updated_at: string
+          votes_per_voter: number
+          winner_movie_id: number | null
+        }
+        Insert: {
+          allow_public_proposals?: boolean
+          cover_url?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          location?: string | null
+          max_proposals_per_voter?: number
+          poll_closes_at?: string | null
+          poll_opens_at?: string | null
+          scheduled_at?: string | null
+          status?: string
+          title: string
+          updated_at?: string
+          votes_per_voter?: number
+          winner_movie_id?: number | null
+        }
+        Update: {
+          allow_public_proposals?: boolean
+          cover_url?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          location?: string | null
+          max_proposals_per_voter?: number
+          poll_closes_at?: string | null
+          poll_opens_at?: string | null
+          scheduled_at?: string | null
+          status?: string
+          title?: string
+          updated_at?: string
+          votes_per_voter?: number
+          winner_movie_id?: number | null
+        }
+        Relationships: []
+      }
+      site_settings: {
+        Row: {
+          about_text: string | null
+          accent_color: string | null
+          default_max_proposals: number
+          default_votes_per_voter: number
+          footer_text: string | null
+          hero_image_url: string | null
+          id: number
+          primary_color: string | null
+          site_name: string
+          tagline: string | null
+          updated_at: string
+        }
+        Insert: {
+          about_text?: string | null
+          accent_color?: string | null
+          default_max_proposals?: number
+          default_votes_per_voter?: number
+          footer_text?: string | null
+          hero_image_url?: string | null
+          id?: number
+          primary_color?: string | null
+          site_name?: string
+          tagline?: string | null
+          updated_at?: string
+        }
+        Update: {
+          about_text?: string | null
+          accent_color?: string | null
+          default_max_proposals?: number
+          default_votes_per_voter?: number
+          footer_text?: string | null
+          hero_image_url?: string | null
+          id?: number
+          primary_color?: string | null
+          site_name?: string
+          tagline?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      user_roles: {
+        Row: {
+          created_at: string
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
+      votes: {
+        Row: {
+          created_at: string
+          id: string
+          option_id: string
+          screening_id: string
+          voter_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          option_id: string
+          screening_id: string
+          voter_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          option_id?: string
+          screening_id?: string
+          voter_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "votes_option_id_fkey"
+            columns: ["option_id"]
+            isOneToOne: false
+            referencedRelation: "poll_options"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "votes_screening_id_fkey"
+            columns: ["screening_id"]
+            isOneToOne: false
+            referencedRelation: "screenings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
+      is_admin: { Args: never; Returns: boolean }
     }
     Enums: {
-      [_ in never]: never
+      app_role: "admin"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +368,8 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["admin"],
+    },
   },
 } as const
