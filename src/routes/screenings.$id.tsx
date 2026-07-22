@@ -5,7 +5,7 @@ import { useVoterId } from "@/hooks/use-voter-id";
 import { MovieSearch, type MoviePick } from "@/components/movie-search";
 import { useState } from "react";
 import { toast } from "sonner";
-import { Calendar, MapPin, ArrowLeft, Trophy, Plus, Check } from "lucide-react";
+import { Calendar, MapPin, ArrowLeft, Trophy, Plus, Check, BarChart3 } from "lucide-react";
 
 export const Route = createFileRoute("/screenings/$id")({
   head: ({ params }) => ({
@@ -134,7 +134,17 @@ function ScreeningPage() {
 
       <div className="rounded-2xl border border-border bg-card p-6 shadow-card">
         <div className="flex items-start justify-between gap-3">
-          <h1 className="font-display text-3xl font-bold">{screening.title}</h1>
+          <div>
+            <h1 className="font-display text-3xl font-bold">{screening.title}</h1>
+            <Link
+              to="/screenings/$id/results"
+              params={{ id }}
+              className="mt-2 inline-flex items-center gap-1.5 text-sm text-primary hover:underline"
+            >
+              <BarChart3 className="h-4 w-4" />
+              Voir les résultats
+            </Link>
+          </div>
           <span
             className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-medium ${
               isOpen ? "bg-primary/15 text-primary" : "bg-muted text-muted-foreground"
