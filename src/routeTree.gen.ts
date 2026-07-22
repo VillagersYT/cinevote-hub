@@ -42,7 +42,7 @@ const ScreeningsIdRoute = ScreeningsIdRouteImport.update({
   getParentRoute: () => rootRouteImport,
 } as any)
 const ScreeningsIdResultsRoute = ScreeningsIdResultsRouteImport.update({
-  id: '/results',
+  id: '/screenings/$id/results',
   path: '/results',
   getParentRoute: () => ScreeningsIdRoute,
 } as any)
