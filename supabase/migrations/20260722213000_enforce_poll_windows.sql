@@ -43,3 +43,6 @@ CREATE POLICY "votes public delete" ON public.votes FOR DELETE USING (
       AND (s.poll_closes_at IS NULL OR s.poll_closes_at > now())
   )
 );
+
+CREATE INDEX IF NOT EXISTS votes_screening_id_voter_id_idx
+  ON public.votes (screening_id, voter_id);
