@@ -113,7 +113,10 @@ function ScreeningResultsPage() {
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
-    const safeTitle = screening.title.toLowerCase().replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "");
+    const safeTitle = screening.title
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/gi, "-")
+      .replace(/^-|-$/g, "");
     anchor.href = url;
     anchor.download = `votes-${safeTitle || screening.id}.csv`;
     document.body.appendChild(anchor);
@@ -122,7 +125,8 @@ function ScreeningResultsPage() {
     URL.revokeObjectURL(url);
   };
 
-  if (sLoading) return <div className="mx-auto max-w-4xl p-8 text-muted-foreground">Chargement…</div>;
+  if (sLoading)
+    return <div className="mx-auto max-w-4xl p-8 text-muted-foreground">Chargement…</div>;
   if (!screening) return null;
 
   return (

@@ -42,8 +42,9 @@ function AuthPage() {
       }
       toast.success("Connecté");
       navigate({ to: "/admin" });
-    } catch (err: any) {
-      toast.error(err?.message || "Accès refusé.");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Accès refusé.";
+      toast.error(message);
     } finally {
       setLoading(false);
     }

@@ -52,7 +52,9 @@ function ScreeningPage() {
     },
   });
 
-  const myVotes = new Set((votes ?? []).filter((v) => v.voter_id === voterId).map((v) => v.option_id));
+  const myVotes = new Set(
+    (votes ?? []).filter((v) => v.voter_id === voterId).map((v) => v.option_id),
+  );
   const myProposals = (options ?? []).filter((o) => o.proposer_voter_id === voterId).length;
   const totalVotes = votes?.length ?? 0;
   const isOpen =
@@ -64,7 +66,9 @@ function ScreeningPage() {
     mutationFn: async (m: MoviePick) => {
       if (!screening) return;
       if (myProposals >= screening.max_proposals_per_voter) {
-        throw new Error(`Limite: ${screening.max_proposals_per_voter} proposition(s) par personne.`);
+        throw new Error(
+          `Limite: ${screening.max_proposals_per_voter} proposition(s) par personne.`,
+        );
       }
       const { error } = await supabase.from("poll_options").insert({
         screening_id: id,
@@ -114,7 +118,8 @@ function ScreeningPage() {
     onError: (e: Error) => toast.error(e.message),
   });
 
-  if (sLoading) return <div className="mx-auto max-w-4xl p-8 text-muted-foreground">Chargement…</div>;
+  if (sLoading)
+    return <div className="mx-auto max-w-4xl p-8 text-muted-foreground">Chargement…</div>;
   if (!screening) return null;
 
   const sortedOptions = [...(options ?? [])].sort((a, b) => {
@@ -182,7 +187,9 @@ function ScreeningPage() {
               {screening.max_proposals_per_voter} proposition(s) max
             </span>
           )}
-          <span className="rounded-full bg-secondary px-2.5 py-1">{totalVotes} vote(s) au total</span>
+          <span className="rounded-full bg-secondary px-2.5 py-1">
+            {totalVotes} vote(s) au total
+          </span>
         </div>
       </div>
 
@@ -192,7 +199,8 @@ function ScreeningPage() {
             <Plus className="h-4 w-4" /> Proposer un film
           </h2>
           <p className="mb-4 text-sm text-muted-foreground">
-            Films uniquement (issus de TMDB). Vous en avez proposé {myProposals}/{screening.max_proposals_per_voter}.
+            Films uniquement (issus de TMDB). Vous en avez proposé {myProposals}/
+            {screening.max_proposals_per_voter}.
           </p>
           <input
             value={proposerName}
@@ -207,7 +215,9 @@ function ScreeningPage() {
 
       <section className="mt-8">
         <h2 className="mb-4 font-display text-xl font-bold">
-          Sondage {screening.votes_per_voter > 1 && `(${myVotes.size}/${screening.votes_per_voter} utilisés)`}
+          Sondage{" "}
+          {screening.votes_per_voter > 1 &&
+            `(${myVotes.size}/${screening.votes_per_voter} utilisés)`}
         </h2>
         {!sortedOptions.length && (
           <div className="rounded-xl border border-dashed border-border p-10 text-center text-muted-foreground">
@@ -243,9 +253,7 @@ function ScreeningPage() {
                   )}
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
-                      {idx === 0 && totalVotes > 0 && (
-                        <Trophy className="h-4 w-4 text-accent" />
-                      )}
+                      {idx === 0 && totalVotes > 0 && <Trophy className="h-4 w-4 text-accent" />}
                       <h3 className="truncate font-semibold">
                         {o.title}
                         {o.release_year && (
@@ -256,7 +264,9 @@ function ScreeningPage() {
                       </h3>
                     </div>
                     {o.overview && (
-                      <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{o.overview}</p>
+                      <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
+                        {o.overview}
+                      </p>
                     )}
                     <div className="mt-1.5 flex items-center gap-2 text-xs text-muted-foreground">
                       <span className="font-semibold text-foreground">{count} vote(s)</span>
