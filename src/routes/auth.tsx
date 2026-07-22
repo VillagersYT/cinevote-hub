@@ -19,28 +19,32 @@ function AuthPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  const [mode, setMode] = useState<"signin" | "signup">("signin");
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     try {
-      if (mode === "signin") {
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
-        if (error) throw error;
-        toast.success("Connecté");
-        navigate({ to: "/admin" });
-      } else {
-        const { error } = await supabase.auth.signUp({
-          email,
-          password,
-          options: { emailRedirectTo: window.location.origin + "/admin" },
-        });
-        if (error) throw error;
-        toast.success("Compte créé — un admin doit vous attribuer le rôle admin.");
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) throw error;
+      if (!data.user?.email_confirmed_at) {
+        await supabase.auth.signOut();
+        throw new Error("Compte non vérifié.");
       }
-    } catch (err: any) {
-      toast.error(err.message);
+      const { data: adminRole, error: roleError } = await supabase
+        .from("user_roles")
+        .select("id")
+        .eq("user_id", data.user.id)
+        .eq("role", "admin")
+        .maybeSingle();
+      if (roleError || !adminRole) {
+        await supabase.auth.signOut();
+        throw new Error("Accès refusé.");
+      }
+      toast.success("Connecté");
+      navigate({ to: "/admin" });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Accès refusé.";
+      toast.error(message);
     } finally {
       setLoading(false);
     }
@@ -76,19 +80,9 @@ function AuthPage() {
             disabled={loading}
             className="w-full rounded-lg bg-primary py-2.5 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-50"
           >
-            {loading ? "…" : mode === "signin" ? "Se connecter" : "Créer un compte"}
+            {loading ? "…" : "Se connecter"}
           </button>
         </form>
-        <button
-          onClick={() => setMode(mode === "signin" ? "signup" : "signin")}
-          className="mt-4 text-xs text-muted-foreground hover:text-foreground"
-        >
-          {mode === "signin" ? "Créer un compte" : "J'ai déjà un compte"}
-        </button>
-        <p className="mt-4 text-xs text-muted-foreground">
-          Le premier compte créé doit être promu admin via la console de la base
-          (table user_roles).
-        </p>
       </div>
     </main>
   );
