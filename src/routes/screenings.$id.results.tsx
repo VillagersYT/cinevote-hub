@@ -205,10 +205,10 @@ function ScreeningResultsPage() {
 }
 
 function escapeCsvCell(value: string) {
-  const normalized =
-    value.startsWith("=") || value.startsWith("+") || value.startsWith("-") || value.startsWith("@")
-      ? `'${value}`
-      : value;
+  const str = String(value ?? "");
+  const leadingTrimmed = str.trimStart();
+  const needsGuard = ["=", "+", "-", "@"].includes(leadingTrimmed[0] ?? "");
+  const normalized = needsGuard ? `'${str}` : str;
   const escaped = normalized.replaceAll('"', '""');
   return `"${escaped}"`;
 }
