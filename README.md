@@ -41,8 +41,8 @@ npm run dev
 
 Set required backend env vars locally:
 
-- `SUPABASE_URL`
-- `SUPABASE_PUBLISHABLE_KEY`
+- `SUPABASE_URL` ou `NEXT_PUBLIC_SUPABASE_URL`
+- `SUPABASE_PUBLISHABLE_KEY` ou `SUPABASE_ANON_KEY` ou `NEXT_PUBLIC_SUPABASE_ANON_KEY`
 - `SUPABASE_SERVICE_ROLE_KEY` (server/admin operations)
 - `TMDB_READ_TOKEN`
 
