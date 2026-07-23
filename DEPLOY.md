@@ -12,13 +12,13 @@ Ce projet est configuré pour se déployer sur Vercel avec Supabase en backend, 
 ### 2. Brancher Supabase via l'intégration officielle Vercel
 - Sur le projet Vercel > **Storage** (ou **Integrations**) > **Marketplace** > chercher **Supabase** > **Add Integration**.
 - Choisir le projet Supabase (existant ou nouveau) et lier au projet Vercel.
-- L'intégration crée automatiquement ces variables d'env dans Vercel :
-  - `SUPABASE_URL`
-  - `SUPABASE_ANON_KEY`
+- L'intégration crée automatiquement ces variables d'env dans Vercel selon sa version :
+  - `SUPABASE_URL` ou `NEXT_PUBLIC_SUPABASE_URL`
+  - `SUPABASE_ANON_KEY` ou `NEXT_PUBLIC_SUPABASE_ANON_KEY`
   - `SUPABASE_SERVICE_ROLE_KEY`
   - `POSTGRES_URL` (non utilisé ici)
 
-Le fichier `vercel.json` mappe ces secrets vers les noms attendus par le code (`VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_PUBLISHABLE_KEY`, etc.). Aucune manip manuelle nécessaire.
+Le fichier `vercel.json` accepte automatiquement les deux formats de variables et les mappe vers les noms attendus par le code (`VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_PUBLISHABLE_KEY`, etc.). Aucune manip manuelle nécessaire si l'intégration Vercel est bien liée au projet.
 
 ### 3. Ajouter le token TMDB
 Une seule variable à définir à la main :
