@@ -2,14 +2,68 @@ import { useEffect, useState } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 
 import { supabase } from "@/integrations/supabase/client";
-import { hasAdminRole } from "@/lib/admin-auth";
-import { getErrorMessage, withTimeout } from "@/lib/supabase-safe";
 
-export function useAuth() {
-  const [user, setUser] = useState<User | null>(null);
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+type AuthState = {
+  user: User | null;
+  isAdmin: boolean;
+  loading: boolean;
+  error: string | null;
+};
+
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  if (typeof error === "string") {
+    return error;
+  }
+
+  if (
+    typeof error === "object" &&
+    error !== null &&
+    "message" in error &&
+    typeof (error as { message?: unknown }).message === "string"
+  ) {
+    return (error as { message: string }).message;
+  }
+
+  return "Erreur inconnue.";
+}
+
+async function hasAdminRole(userId: string): Promise<boolean> {
+  const { data, error } = await supabase.rpc("has_role", {
+    _user_id: userId,
+    _role: "admin",
+  });
+
+  if (!error) {
+    return data === true;
+  }
+
+  console.warn("[use-auth] has_role failed, fallback user_roles:", error);
+
+  const fallback = await supabase
+    .from("user_roles")
+    .select("role")
+    .eq("user_id", userId)
+    .eq("role", "admin")
+    .maybeSingle();
+
+  if (fallback.error) {
+    throw fallback.error;
+  }
+
+  return fallback.data?.role === "admin";
+}
+
+export function useAuth(): AuthState {
+  const [state, setState] = useState<AuthState>({
+    user: null,
+    isAdmin: false,
+    loading: true,
+    error: null,
+  });
 
   useEffect(() => {
     let cancelled = false;
@@ -18,69 +72,72 @@ export function useAuth() {
     async function applySession(session: Session | null) {
       const currentRequestId = ++requestId;
 
-      setLoading(true);
-      setError(null);
+      setState((previous) => ({
+        ...previous,
+        loading: true,
+        error: null,
+      }));
 
       try {
-        const currentUser = session?.user ?? null;
-        const currentIsAdmin = currentUser
-          ? await hasAdminRole(currentUser.id)
-          : false;
+        const user = session?.user ?? null;
+        const isAdmin = user ? await hasAdminRole(user.id) : false;
 
         if (cancelled || currentRequestId !== requestId) {
           return;
         }
 
-        setUser(currentUser);
-        setIsAdmin(currentIsAdmin);
-        setError(null);
-      } catch (authError) {
+        setState({
+          user,
+          isAdmin,
+          loading: false,
+          error: null,
+        });
+      } catch (error) {
         if (cancelled || currentRequestId !== requestId) {
           return;
         }
 
-        console.error("[use-auth] session/admin check failed:", authError);
+        console.error("[use-auth] admin/session check failed:", error);
 
-        setUser(null);
-        setIsAdmin(false);
-        setError(getErrorMessage(authError));
-      } finally {
-        if (!cancelled && currentRequestId === requestId) {
-          setLoading(false);
-        }
+        setState({
+          user: null,
+          isAdmin: false,
+          loading: false,
+          error: getErrorMessage(error),
+        });
       }
     }
 
     async function loadInitialSession() {
       try {
-        const { data, error: sessionError } = await withTimeout(
-          supabase.auth.getSession(),
-          10_000,
-          "Chargement de la session Supabase",
-        );
+        const { data, error } = await supabase.auth.getSession();
 
-        if (sessionError) {
-          throw sessionError;
+        if (error) {
+          throw error;
         }
 
         await applySession(data.session);
-      } catch (authError) {
+      } catch (error) {
         if (cancelled) {
           return;
         }
 
-        console.error("[use-auth] initial session failed:", authError);
+        console.error("[use-auth] getSession failed:", error);
 
-        setUser(null);
-        setIsAdmin(false);
-        setError(getErrorMessage(authError));
-        setLoading(false);
+        setState({
+          user: null,
+          isAdmin: false,
+          loading: false,
+          error: getErrorMessage(error),
+        });
       }
     }
 
     void loadInitialSession();
 
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
       window.setTimeout(() => {
         void applySession(session);
       }, 0);
@@ -88,14 +145,9 @@ export function useAuth() {
 
     return () => {
       cancelled = true;
-      listener.subscription.unsubscribe();
+      subscription.unsubscribe();
     };
   }, []);
 
-  return {
-    user,
-    isAdmin,
-    loading,
-    error,
-  };
+  return state;
 }
