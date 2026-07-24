@@ -1,6 +1,6 @@
-# Déploiement Vercel + Supabase (setup auto)
+# Déploiement Vercel + Supabase (frontend statique)
 
-Ce projet est configuré pour se déployer sur Vercel avec Supabase en backend, sans configuration manuelle des variables d'environnement.
+Ce projet est configuré pour que Vercel héberge uniquement le frontend statique. Toute la donnée passe directement par Supabase avec les règles RLS de la base.
 
 ## Étapes (une seule fois)
 
@@ -15,10 +15,9 @@ Ce projet est configuré pour se déployer sur Vercel avec Supabase en backend, 
 - L'intégration crée automatiquement ces variables d'env dans Vercel selon sa version :
   - `SUPABASE_URL` ou `NEXT_PUBLIC_SUPABASE_URL`
   - `SUPABASE_ANON_KEY` ou `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-  - `SUPABASE_SERVICE_ROLE_KEY`
   - `POSTGRES_URL` (non utilisé ici)
 
-Le fichier `vercel.json` accepte automatiquement les deux formats de variables et les mappe vers les noms attendus par le code (`VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_PUBLISHABLE_KEY`, etc.). Aucune manip manuelle nécessaire si l'intégration Vercel est bien liée au projet.
+Le script `build:vercel` transforme automatiquement ces noms en variables `VITE_*` utilisables par le frontend. Aucune variable backend n'est nécessaire au runtime Vercel.
 
 ### 3. Ajouter le token TMDB
 Une seule variable à définir à la main :
@@ -26,6 +25,8 @@ Une seule variable à définir à la main :
   - Name : `TMDB_READ_TOKEN`
   - Value : *(votre token de lecture TMDB)*
   - Environments : Production, Preview, Development
+
+Comme Vercel n'héberge plus de backend pour ce projet, la recherche TMDB se fait côté navigateur : ce token est donc exposé dans le bundle frontend.
 
 ### 4. Redéployer
 Vercel > Deployments > dernier déploiement > **Redeploy**.
@@ -45,5 +46,5 @@ values ('<votre-user-id>', 'admin');
 
 ## C'est tout
 - Push sur `main` → déploiement auto.
-- Aucune config Cloudflare, Netlify ou autre requise.
+- Vercel sert `dist/client` uniquement, sans fonction serveur.
 - Supabase se re-configure tout seul si vous rebranchez l'intégration.

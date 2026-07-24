@@ -1,10 +1,8 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
-import { saveScreening, deleteScreening, deleteOption, saveSettings } from "@/lib/screenings.functions";
 import { toast } from "sonner";
 import { Trash2, Plus, Settings, Film, LogOut, Trophy } from "lucide-react";
 
@@ -12,6 +10,11 @@ export const Route = createFileRoute("/admin")({
   head: () => ({
     meta: [
       { title: "Admin — Ciné-Club" },
+      { name: "description", content: "Gestion protégée des séances, sondages et paramètres du ciné-club." },
+      { property: "og:title", content: "Admin — Ciné-Club" },
+      { property: "og:description", content: "Gestion protégée des séances et sondages du ciné-club." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
       { name: "robots", content: "noindex" },
     ],
   }),
@@ -96,9 +99,6 @@ function emptyScreening() {
 
 function ScreeningsAdmin() {
   const qc = useQueryClient();
-  const save = useServerFn(saveScreening);
-  const del = useServerFn(deleteScreening);
-  const delOpt = useServerFn(deleteOption);
   const [editing, setEditing] = useState<ReturnType<typeof emptyScreening> | null>(null);
 
   const { data: screenings } = useQuery({
@@ -111,17 +111,25 @@ function ScreeningsAdmin() {
 
   const saveMut = useMutation({
     mutationFn: async (s: ReturnType<typeof emptyScreening>) => {
-      await save({
-        data: {
-          ...s,
-          description: s.description || null,
-          location: s.location || null,
-          scheduled_at: s.scheduled_at ? new Date(s.scheduled_at).toISOString() : null,
-          poll_opens_at: s.poll_opens_at ? new Date(s.poll_opens_at).toISOString() : null,
-          poll_closes_at: s.poll_closes_at ? new Date(s.poll_closes_at).toISOString() : null,
-          cover_url: s.cover_url || null,
-        } as any,
-      });
+      const payload = {
+        title: s.title,
+        description: s.description || null,
+        location: s.location || null,
+        scheduled_at: s.scheduled_at ? new Date(s.scheduled_at).toISOString() : null,
+        poll_opens_at: s.poll_opens_at ? new Date(s.poll_opens_at).toISOString() : null,
+        poll_closes_at: s.poll_closes_at ? new Date(s.poll_closes_at).toISOString() : null,
+        allow_public_proposals: s.allow_public_proposals,
+        max_proposals_per_voter: s.max_proposals_per_voter,
+        votes_per_voter: s.votes_per_voter,
+        status: s.status,
+        cover_url: s.cover_url || null,
+        winner_movie_id: s.winner_movie_id,
+      };
+
+      const { error } = s.id
+        ? await supabase.from("screenings").update(payload).eq("id", s.id)
+        : await supabase.from("screenings").insert(payload);
+      if (error) throw new Error(error.message);
     },
     onSuccess: () => {
       toast.success("Enregistré");
@@ -133,12 +141,28 @@ function ScreeningsAdmin() {
   });
 
   const delMut = useMutation({
-    mutationFn: (id: string) => del({ data: { id } }),
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("screenings").delete().eq("id", id);
+      if (error) throw new Error(error.message);
+    },
     onSuccess: () => {
       toast.success("Supprimé");
       qc.invalidateQueries({ queryKey: ["admin_screenings"] });
       qc.invalidateQueries({ queryKey: ["screenings"] });
     },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const delOptMut = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("poll_options").delete().eq("id", id);
+      if (error) throw new Error(error.message);
+    },
+    onSuccess: () => {
+      toast.success("Film supprimé");
+      qc.invalidateQueries();
+    },
+    onError: (e: Error) => toast.error(e.message),
   });
 
   return (
@@ -237,7 +261,7 @@ function ScreeningsAdmin() {
             </label>
           </div>
 
-          {editing.id && <ExistingOptions screeningId={editing.id} onDelete={(id) => delOpt({ data: { id } }).then(() => qc.invalidateQueries())} onWinner={(tmdbId) => setEditing({ ...editing, winner_movie_id: tmdbId })} winnerId={editing.winner_movie_id} />}
+          {editing.id && <ExistingOptions screeningId={editing.id} onDelete={(id) => delOptMut.mutate(id)} onWinner={(tmdbId) => setEditing({ ...editing, winner_movie_id: tmdbId })} winnerId={editing.winner_movie_id} />}
 
           <div className="mt-5 flex gap-2">
             <button
@@ -296,7 +320,6 @@ function ExistingOptions({ screeningId, onDelete, onWinner, winnerId }: { screen
 
 function SettingsAdmin() {
   const qc = useQueryClient();
-  const saveFn = useServerFn(saveSettings);
   const { data } = useQuery({
     queryKey: ["admin_settings"],
     queryFn: async () => {
@@ -310,20 +333,21 @@ function SettingsAdmin() {
   }, [data, form]);
 
   const mut = useMutation({
-    mutationFn: async () =>
-      saveFn({
-        data: {
-          site_name: form.site_name,
-          tagline: form.tagline || null,
-          primary_color: form.primary_color || null,
-          accent_color: form.accent_color || null,
-          hero_image_url: form.hero_image_url || null,
-          about_text: form.about_text || null,
-          footer_text: form.footer_text || null,
-          default_votes_per_voter: Number(form.default_votes_per_voter),
-          default_max_proposals: Number(form.default_max_proposals),
-        } as any,
-      }),
+    mutationFn: async () => {
+      const { error } = await supabase.from("site_settings").upsert({
+        id: 1,
+        site_name: form.site_name,
+        tagline: form.tagline || null,
+        primary_color: form.primary_color || null,
+        accent_color: form.accent_color || null,
+        hero_image_url: form.hero_image_url || null,
+        about_text: form.about_text || null,
+        footer_text: form.footer_text || null,
+        default_votes_per_voter: Number(form.default_votes_per_voter),
+        default_max_proposals: Number(form.default_max_proposals),
+      });
+      if (error) throw new Error(error.message);
+    },
     onSuccess: () => {
       toast.success("Paramètres enregistrés");
       qc.invalidateQueries({ queryKey: ["site_settings"] });

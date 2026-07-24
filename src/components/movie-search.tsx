@@ -1,6 +1,4 @@
 import { useState, useEffect, useRef } from "react";
-import { useServerFn } from "@tanstack/react-start";
-import { searchMovies } from "@/lib/tmdb.functions";
 import { Search, Loader2 } from "lucide-react";
 
 export type MoviePick = {
@@ -13,12 +11,56 @@ export type MoviePick = {
   release_year: number | null;
 };
 
+type TmdbMovieResult = {
+  id: number;
+  title: string;
+  original_title?: string;
+  overview?: string;
+  poster_path: string | null;
+  backdrop_path: string | null;
+  release_date?: string;
+  genre_ids?: number[];
+};
+
+const TMDB_BASE = "https://api.themoviedb.org/3";
+const EXCLUDED_GENRES = new Set([16, 99]);
+
+async function searchTmdbMovies(q: string): Promise<MoviePick[]> {
+  const token = import.meta.env.VITE_TMDB_READ_TOKEN as string | undefined;
+  if (!token) throw new Error("Token TMDB manquant.");
+
+  const url = new URL(`${TMDB_BASE}/search/movie`);
+  url.searchParams.set("language", "fr-FR");
+  url.searchParams.set("include_adult", "false");
+  url.searchParams.set("page", "1");
+  url.searchParams.set("query", q);
+
+  const response = await fetch(url.toString(), {
+    headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+  });
+  if (!response.ok) throw new Error("Recherche TMDB indisponible.");
+
+  const payload = (await response.json()) as { results?: TmdbMovieResult[] };
+  return (payload.results ?? [])
+    .filter((movie) => !(movie.genre_ids ?? []).some((genreId) => EXCLUDED_GENRES.has(genreId)))
+    .slice(0, 8)
+    .map((movie) => ({
+      id: movie.id,
+      title: movie.title,
+      original_title: movie.original_title ?? movie.title,
+      overview: movie.overview ?? "",
+      poster_path: movie.poster_path,
+      backdrop_path: movie.backdrop_path,
+      release_year: movie.release_date ? Number(movie.release_date.slice(0, 4)) : null,
+    }));
+}
+
 export function MovieSearch({ onPick }: { onPick: (m: MoviePick) => void }) {
-  const search = useServerFn(searchMovies);
   const [q, setQ] = useState("");
   const [results, setResults] = useState<MoviePick[]>([]);
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const timeoutRef = useRef<number | null>(null);
 
   useEffect(() => {
@@ -28,11 +70,15 @@ export function MovieSearch({ onPick }: { onPick: (m: MoviePick) => void }) {
       return;
     }
     setLoading(true);
+    setError(null);
     timeoutRef.current = window.setTimeout(async () => {
       try {
-        const res = await search({ data: { q } });
+        const res = await searchTmdbMovies(q);
         setResults(res);
         setOpen(true);
+      } catch (err) {
+        setResults([]);
+        setError(err instanceof Error ? err.message : "Recherche impossible.");
       } finally {
         setLoading(false);
       }
@@ -40,7 +86,7 @@ export function MovieSearch({ onPick }: { onPick: (m: MoviePick) => void }) {
     return () => {
       if (timeoutRef.current) window.clearTimeout(timeoutRef.current);
     };
-  }, [q, search]);
+  }, [q]);
 
   return (
     <div className="relative">
@@ -92,6 +138,7 @@ export function MovieSearch({ onPick }: { onPick: (m: MoviePick) => void }) {
           ))}
         </div>
       )}
+      {error && <p className="mt-2 text-xs text-destructive">{error}</p>}
     </div>
   );
 }

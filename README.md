@@ -21,80 +21,36 @@ npm i
 npm run dev
 ```
 
-## Architecture (frontend + backend)
+## Architecture
 
-This app uses **TanStack Start server functions** as backend logic (in `src/lib/*.functions.ts`) plus Supabase.
+This app is deployed as a **static frontend**. The browser talks directly to Supabase, and database access is controlled by RLS policies.
 
-- Frontend only on Vercel + backend on `localhost` does **not** work directly.
-- Vercel cannot call `localhost`; your backend must be reachable from the public internet.
+- Vercel hosts only the generated frontend (`dist/client`).
+- There is no Vercel runtime backend required.
+- Movie search calls TMDB from the browser, so the TMDB read token is exposed in the frontend bundle.
 
-## Run backend on your machine (with Vercel frontend)
+## Local development
 
-### 1) Start backend locally
+### 1) Configure local env
 
-Run the app server on your machine:
-
-```sh
-npm i
-npm run dev
-```
-
-Set required backend env vars locally:
-
-- `SUPABASE_URL` ou `NEXT_PUBLIC_SUPABASE_URL`
-- `SUPABASE_PUBLISHABLE_KEY` ou `SUPABASE_ANON_KEY` ou `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-- `SUPABASE_SERVICE_ROLE_KEY` (server/admin operations)
-- `TMDB_READ_TOKEN`
-
-You can start from:
+Create a local env file:
 
 ```sh
 cp .env.example .env
 ```
 
-### 2) Expose local backend with HTTPS tunnel
+Set required frontend env vars locally:
 
-Use a tunnel service (Cloudflare Tunnel or ngrok) to expose your local backend port.
+- `VITE_SUPABASE_URL`
+- `VITE_SUPABASE_PUBLISHABLE_KEY`
+- `VITE_TMDB_READ_TOKEN`
 
-Example with ngrok:
+### 2) Start locally
 
 ```sh
-ngrok http 3000
+npm i
+npm run dev
 ```
-
-Keep the tunnel running and note the public HTTPS URL (example: `https://my-backend.ngrok.app`).
-
-### 3) Connect Vercel frontend to the backend URL
-
-Configure Vercel rewrites/proxy so backend routes are forwarded to the tunnel URL.
-
-At minimum, forward TanStack server function routes (commonly `/_server/*`) to:
-
-- `https://my-backend.ngrok.app`
-
-Then redeploy frontend and verify requests are reaching your tunnel.
-
-### 4) Supabase auth configuration
-
-If you use Supabase auth, add your frontend and tunnel domains to Supabase:
-
-- **Authentication → URL Configuration**
-  - Site URL: your Vercel frontend URL
-  - Additional Redirect URLs: Vercel URL + tunnel URL
-
-### 5) Validate end-to-end flow
-
-Check all critical flows after each redeploy/tunnel restart:
-
-- Login/logout
-- Proposal + vote actions
-- Admin actions (create/update screening, settings)
-- TMDB movie search
-
-## Production recommendation
-
-- For production reliability, host backend on Vercel or a VPS/server.
-- Keep local backend + tunnel for temporary testing only.
 
 ## Built with
 
