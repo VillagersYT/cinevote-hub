@@ -15,22 +15,26 @@ export const Route = createFileRoute("/auth")({
       { name: "robots", content: "noindex" },
     ],
   }),
-  ssr: false,
   component: AuthPage,
 });
 
 async function hasAdminRole(userId: string): Promise<boolean> {
-  const { data, error } = await (supabase as any).rpc("has_role", {
-    _user_id: userId,
-    _role: "admin",
-  });
+  try {
+    const { data, error } = await supabase.rpc("has_role", {
+      _user_id: userId,
+      _role: "admin",
+    });
 
-  if (error) {
-    console.error("[auth] has_role error:", error);
+    if (error) {
+      console.error("[auth] has_role error:", error);
+      return false;
+    }
+
+    return data === true;
+  } catch (error) {
+    console.error("[auth] has_role crashed:", error);
     return false;
   }
-
-  return data === true;
 }
 
 function AuthPage() {
@@ -69,7 +73,7 @@ function AuthPage() {
       }
 
       toast.success("Connecté");
-      navigate({ to: "/admin" });
+      navigate({ to: "/admin", replace: true });
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Erreur de connexion.";
@@ -82,7 +86,7 @@ function AuthPage() {
   };
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center px-4 py-12">
+    <main className="mx-auto flex min-h-[calc(100vh-96px)] max-w-md flex-col justify-center px-4 py-12">
       <section className="rounded-2xl border border-border bg-card p-6 shadow-sm">
         <h1 className="text-2xl font-bold">Espace admin</h1>
 
