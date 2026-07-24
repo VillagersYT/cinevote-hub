@@ -1,20 +1,20 @@
-import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/hooks/use-auth";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useEffect, useState, type ReactNode } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Film, LogOut, Plus, Settings, Trash2, Trophy } from "lucide-react";
 import { toast } from "sonner";
-import { Trash2, Plus, Settings, Film, LogOut, Trophy } from "lucide-react";
+
+import { useAuth } from "@/hooks/use-auth";
+import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/admin")({
   head: () => ({
     meta: [
       { title: "Admin — Ciné-Club" },
-      { name: "description", content: "Gestion protégée des séances, sondages et paramètres du ciné-club." },
-      { property: "og:title", content: "Admin — Ciné-Club" },
-      { property: "og:description", content: "Gestion protégée des séances et sondages du ciné-club." },
-      { property: "og:type", content: "website" },
-      { name: "twitter:card", content: "summary" },
+      {
+        name: "description",
+        content: "Gestion protégée des séances, sondages et paramètres.",
+      },
       { name: "robots", content: "noindex" },
     ],
   }),
@@ -22,318 +22,703 @@ export const Route = createFileRoute("/admin")({
   component: AdminPage,
 });
 
+type ScreeningStatus = "open" | "closed" | "finished";
+
+type ScreeningRow = {
+  id: string;
+  title: string;
+  description: string | null;
+  location: string | null;
+  scheduled_at: string | null;
+  poll_opens_at: string | null;
+  poll_closes_at: string | null;
+  allow_public_proposals: boolean;
+  max_proposals_per_voter: number;
+  votes_per_voter: number;
+  status: ScreeningStatus;
+  cover_url: string | null;
+  winner_movie_id: number | null;
+  created_at?: string;
+};
+
+type ScreeningForm = {
+  id?: string;
+  title: string;
+  description: string;
+  location: string;
+  scheduled_at: string;
+  poll_opens_at: string;
+  poll_closes_at: string;
+  allow_public_proposals: boolean;
+  max_proposals_per_voter: number;
+  votes_per_voter: number;
+  status: ScreeningStatus;
+  cover_url: string;
+  winner_movie_id: number | null;
+};
+
+type PollOptionRow = {
+  id: string;
+  screening_id: string;
+  tmdb_id: number;
+  title: string;
+  release_year: number | null;
+};
+
+type SettingsForm = {
+  site_name: string;
+  tagline: string;
+  primary_color: string;
+  accent_color: string;
+  hero_image_url: string;
+  about_text: string;
+  footer_text: string;
+  default_votes_per_voter: number;
+  default_max_proposals: number;
+};
+
 function AdminPage() {
   const { user, loading, isAdmin } = useAuth();
   const navigate = useNavigate();
+
   const [tab, setTab] = useState<"screenings" | "settings">("screenings");
 
   useEffect(() => {
-    if (!loading && !user) navigate({ to: "/auth" });
+    if (!loading && !user) {
+      navigate({ to: "/auth" });
+    }
   }, [loading, user, navigate]);
 
-  if (loading) return <div className="p-10 text-muted-foreground">Chargement…</div>;
-  if (!user) return null;
-  if (!isAdmin)
+  if (loading) {
     return (
-      <div className="mx-auto max-w-md p-10 text-center">
-        <h1 className="font-display text-2xl font-bold">Accès refusé</h1>
-        <p className="mt-2 text-sm text-muted-foreground">
-          Votre compte n'a pas le rôle admin. Un administrateur doit vous l'attribuer via la base.
-        </p>
-        <button
-          onClick={() => supabase.auth.signOut().then(() => navigate({ to: "/auth" }))}
-          className="mt-4 rounded-lg border border-border px-4 py-2 text-sm"
-        >
-          Se déconnecter
-        </button>
-      </div>
+      <main className="mx-auto max-w-5xl px-4 py-10">
+        <div className="rounded-2xl border border-border bg-card p-6 text-muted-foreground">
+          Chargement…
+        </div>
+      </main>
     );
+  }
+
+  if (!user) {
+    return (
+      <main className="mx-auto max-w-3xl px-4 py-10">
+        <section className="rounded-2xl border border-border bg-card p-6">
+          <h1 className="text-2xl font-bold">Connexion requise</h1>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Tu dois te connecter pour accéder à l’administration.
+          </p>
+          <a
+            href="/auth"
+            className="mt-4 inline-flex rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90"
+          >
+            Aller à la connexion
+          </a>
+        </section>
+      </main>
+    );
+  }
+
+  if (!isAdmin) {
+    return (
+      <main className="mx-auto max-w-3xl px-4 py-10">
+        <section className="rounded-2xl border border-border bg-card p-6">
+          <h1 className="text-2xl font-bold">Accès refusé</h1>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Ton compte est connecté, mais il n’a pas le rôle admin.
+          </p>
+
+          <button
+            type="button"
+            onClick={() => {
+              void supabase.auth.signOut().then(() => navigate({ to: "/auth" }));
+            }}
+            className="mt-4 rounded-lg border border-border px-4 py-2 text-sm hover:bg-secondary"
+          >
+            Se déconnecter
+          </button>
+        </section>
+      </main>
+    );
+  }
 
   return (
     <main className="mx-auto max-w-6xl px-4 py-8">
-      <div className="mb-6 flex items-center justify-between">
-        <h1 className="font-display text-3xl font-bold">Administration</h1>
+      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-3xl font-bold">Administration</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Gère les séances, les films proposés et les paramètres du site.
+          </p>
+        </div>
+
         <button
-          onClick={() => supabase.auth.signOut().then(() => navigate({ to: "/" }))}
-          className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-secondary"
+          type="button"
+          onClick={() => {
+            void supabase.auth.signOut().then(() => navigate({ to: "/" }));
+          }}
+          className="inline-flex items-center justify-center gap-2 rounded-lg border border-border px-4 py-2 text-sm hover:bg-secondary"
         >
-          <LogOut className="h-3.5 w-3.5" /> Déconnexion
+          <LogOut className="h-4 w-4" />
+          Déconnexion
         </button>
       </div>
-      <div className="mb-6 flex gap-1 rounded-lg border border-border bg-card p-1 w-fit">
+
+      <div className="mb-6 flex rounded-xl border border-border bg-card p-1">
         <button
+          type="button"
           onClick={() => setTab("screenings")}
-          className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm transition ${tab === "screenings" ? "bg-primary text-primary-foreground" : "hover:bg-secondary"}`}
+          className={`inline-flex flex-1 items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm transition ${
+            tab === "screenings"
+              ? "bg-primary text-primary-foreground"
+              : "hover:bg-secondary"
+          }`}
         >
-          <Film className="h-3.5 w-3.5" /> Séances
+          <Film className="h-4 w-4" />
+          Séances
         </button>
+
         <button
+          type="button"
           onClick={() => setTab("settings")}
-          className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm transition ${tab === "settings" ? "bg-primary text-primary-foreground" : "hover:bg-secondary"}`}
+          className={`inline-flex flex-1 items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm transition ${
+            tab === "settings"
+              ? "bg-primary text-primary-foreground"
+              : "hover:bg-secondary"
+          }`}
         >
-          <Settings className="h-3.5 w-3.5" /> Paramètres
+          <Settings className="h-4 w-4" />
+          Paramètres
         </button>
       </div>
+
       {tab === "screenings" ? <ScreeningsAdmin /> : <SettingsAdmin />}
     </main>
   );
 }
 
-function emptyScreening() {
-  return {
-    id: undefined as string | undefined,
-    title: "",
-    description: "",
-    location: "",
-    scheduled_at: "",
-    poll_opens_at: "",
-    poll_closes_at: "",
-    allow_public_proposals: true,
-    max_proposals_per_voter: 3,
-    votes_per_voter: 1,
-    status: "open" as "open" | "closed" | "finished",
-    cover_url: "",
-    winner_movie_id: null as number | null,
-  };
-}
-
 function ScreeningsAdmin() {
-  const qc = useQueryClient();
-  const [editing, setEditing] = useState<ReturnType<typeof emptyScreening> | null>(null);
+  const queryClient = useQueryClient();
+  const [editing, setEditing] = useState<ScreeningForm | null>(null);
 
-  const { data: screenings } = useQuery({
+  const { data: screenings = [], isLoading } = useQuery({
     queryKey: ["admin_screenings"],
     queryFn: async () => {
-      const { data } = await supabase.from("screenings").select("*").order("created_at", { ascending: false });
-      return data ?? [];
+      const { data, error } = await supabase
+        .from("screenings")
+        .select("*")
+        .order("created_at", { ascending: false });
+
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      return (data ?? []) as ScreeningRow[];
     },
   });
 
-  const saveMut = useMutation({
-    mutationFn: async (s: ReturnType<typeof emptyScreening>) => {
+  const saveMutation = useMutation({
+    mutationFn: async (screening: ScreeningForm) => {
       const payload = {
-        title: s.title,
-        description: s.description || null,
-        location: s.location || null,
-        scheduled_at: s.scheduled_at ? new Date(s.scheduled_at).toISOString() : null,
-        poll_opens_at: s.poll_opens_at ? new Date(s.poll_opens_at).toISOString() : null,
-        poll_closes_at: s.poll_closes_at ? new Date(s.poll_closes_at).toISOString() : null,
-        allow_public_proposals: s.allow_public_proposals,
-        max_proposals_per_voter: s.max_proposals_per_voter,
-        votes_per_voter: s.votes_per_voter,
-        status: s.status,
-        cover_url: s.cover_url || null,
-        winner_movie_id: s.winner_movie_id,
+        title: screening.title.trim(),
+        description: screening.description.trim() || null,
+        location: screening.location.trim() || null,
+        scheduled_at: toIsoDate(screening.scheduled_at),
+        poll_opens_at: toIsoDate(screening.poll_opens_at),
+        poll_closes_at: toIsoDate(screening.poll_closes_at),
+        allow_public_proposals: screening.allow_public_proposals,
+        max_proposals_per_voter: Number(screening.max_proposals_per_voter),
+        votes_per_voter: Number(screening.votes_per_voter),
+        status: screening.status,
+        cover_url: screening.cover_url.trim() || null,
+        winner_movie_id: screening.winner_movie_id,
       };
 
-      const { error } = s.id
-        ? await supabase.from("screenings").update(payload).eq("id", s.id)
-        : await supabase.from("screenings").insert(payload);
-      if (error) throw new Error(error.message);
+      const { error } = screening.id
+        ? await supabase
+            .from("screenings")
+            .update(payload as any)
+            .eq("id", screening.id)
+        : await supabase.from("screenings").insert(payload as any);
+
+      if (error) {
+        throw new Error(error.message);
+      }
     },
     onSuccess: () => {
-      toast.success("Enregistré");
-      qc.invalidateQueries({ queryKey: ["admin_screenings"] });
-      qc.invalidateQueries({ queryKey: ["screenings"] });
+      toast.success("Séance enregistrée");
       setEditing(null);
+      queryClient.invalidateQueries({ queryKey: ["admin_screenings"] });
+      queryClient.invalidateQueries({ queryKey: ["screenings"] });
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (error: Error) => {
+      toast.error(error.message);
+    },
   });
 
-  const delMut = useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase.from("screenings").delete().eq("id", id);
-      if (error) throw new Error(error.message);
+  const deleteMutation = useMutation({
+    mutationFn: async (screeningId: string) => {
+      const { error } = await supabase
+        .from("screenings")
+        .delete()
+        .eq("id", screeningId);
+
+      if (error) {
+        throw new Error(error.message);
+      }
     },
     onSuccess: () => {
-      toast.success("Supprimé");
-      qc.invalidateQueries({ queryKey: ["admin_screenings"] });
-      qc.invalidateQueries({ queryKey: ["screenings"] });
+      toast.success("Séance supprimée");
+      queryClient.invalidateQueries({ queryKey: ["admin_screenings"] });
+      queryClient.invalidateQueries({ queryKey: ["screenings"] });
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (error: Error) => {
+      toast.error(error.message);
+    },
   });
 
-  const delOptMut = useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase.from("poll_options").delete().eq("id", id);
-      if (error) throw new Error(error.message);
+  const deleteOptionMutation = useMutation({
+    mutationFn: async (optionId: string) => {
+      const { error } = await supabase
+        .from("poll_options")
+        .delete()
+        .eq("id", optionId);
+
+      if (error) {
+        throw new Error(error.message);
+      }
     },
     onSuccess: () => {
       toast.success("Film supprimé");
-      qc.invalidateQueries();
+      queryClient.invalidateQueries();
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (error: Error) => {
+      toast.error(error.message);
+    },
   });
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[1fr_1.2fr]">
+    <section className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(320px,420px)]">
       <div>
         <button
-          onClick={() => setEditing(emptyScreening())}
-          className="mb-3 inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90"
+          type="button"
+          onClick={() => setEditing(createEmptyScreening())}
+          className="mb-4 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90 sm:w-auto"
         >
-          <Plus className="h-4 w-4" /> Nouvelle séance
+          <Plus className="h-4 w-4" />
+          Nouvelle séance
         </button>
-        <div className="space-y-2">
-          {screenings?.map((s) => (
-            <div
-              key={s.id}
-              className={`flex items-center justify-between rounded-lg border p-3 ${editing?.id === s.id ? "border-primary bg-primary/5" : "border-border bg-card"}`}
-            >
-              <button
-                onClick={() => setEditing({ ...(emptyScreening()), ...s, cover_url: s.cover_url ?? "", description: s.description ?? "", location: s.location ?? "", scheduled_at: s.scheduled_at ? new Date(s.scheduled_at).toISOString().slice(0, 16) : "", poll_opens_at: s.poll_opens_at ? new Date(s.poll_opens_at).toISOString().slice(0, 16) : "", poll_closes_at: s.poll_closes_at ? new Date(s.poll_closes_at).toISOString().slice(0, 16) : "" } as any)}
-                className="min-w-0 flex-1 text-left"
-              >
-                <div className="truncate font-medium">{s.title}</div>
-                <div className="text-xs text-muted-foreground">{s.status}</div>
-              </button>
-              <div className="flex gap-1">
-                <Link
-                  to="/screenings/$id"
-                  params={{ id: s.id }}
-                  className="rounded p-1.5 text-xs hover:bg-secondary"
-                >
-                  Voir
-                </Link>
-                <button
-                  onClick={() => {
-                    if (confirm("Supprimer cette séance ?")) delMut.mutate(s.id);
-                  }}
-                  className="rounded p-1.5 text-destructive hover:bg-destructive/10"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </button>
-              </div>
+
+        <div className="space-y-3">
+          {isLoading && (
+            <div className="rounded-2xl border border-border bg-card p-5 text-sm text-muted-foreground">
+              Chargement des séances…
             </div>
+          )}
+
+          {!isLoading && screenings.length === 0 && (
+            <div className="rounded-2xl border border-border bg-card p-5 text-sm text-muted-foreground">
+              Aucune séance pour le moment.
+            </div>
+          )}
+
+          {screenings.map((screening) => (
+            <article
+              key={screening.id}
+              className="rounded-2xl border border-border bg-card p-5 shadow-sm"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <button
+                  type="button"
+                  onClick={() => setEditing(createFormFromScreening(screening))}
+                  className="min-w-0 flex-1 text-left"
+                >
+                  <h2 className="truncate font-semibold">{screening.title}</h2>
+                  <p className="mt-1 text-xs uppercase tracking-wide text-muted-foreground">
+                    {screening.status}
+                  </p>
+                  {screening.scheduled_at && (
+                    <p className="mt-2 text-sm text-muted-foreground">
+                      {new Date(screening.scheduled_at).toLocaleString("fr-FR")}
+                    </p>
+                  )}
+                </button>
+
+                <div className="flex shrink-0 items-center gap-1">
+                  <a
+                    href={`/screenings/${screening.id}`}
+                    className="rounded-lg border border-border px-3 py-1.5 text-xs hover:bg-secondary"
+                  >
+                    Voir
+                  </a>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const ok = window.confirm("Supprimer cette séance ?");
+                      if (ok) {
+                        deleteMutation.mutate(screening.id);
+                      }
+                    }}
+                    className="rounded-lg p-2 text-destructive hover:bg-destructive/10"
+                    aria-label="Supprimer la séance"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+            </article>
           ))}
         </div>
       </div>
 
-      {editing && (
-        <div className="rounded-2xl border border-border bg-card p-6">
-          <h2 className="mb-4 font-display text-lg font-bold">
-            {editing.id ? "Modifier la séance" : "Nouvelle séance"}
-          </h2>
-          <div className="space-y-3">
-            <Field label="Titre">
-              <input value={editing.title} onChange={(e) => setEditing({ ...editing, title: e.target.value })} className={inputCls} />
-            </Field>
-            <Field label="Description">
-              <textarea value={editing.description} onChange={(e) => setEditing({ ...editing, description: e.target.value })} rows={3} className={inputCls} />
-            </Field>
-            <div className="grid gap-3 sm:grid-cols-2">
+      <div>
+        {editing ? (
+          <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+            <h2 className="mb-4 text-lg font-bold">
+              {editing.id ? "Modifier la séance" : "Nouvelle séance"}
+            </h2>
+
+            <div className="space-y-3">
+              <Field label="Titre">
+                <input
+                  value={editing.title}
+                  onChange={(event) =>
+                    setEditing({ ...editing, title: event.target.value })
+                  }
+                  className={inputClassName}
+                />
+              </Field>
+
+              <Field label="Description">
+                <textarea
+                  rows={3}
+                  value={editing.description}
+                  onChange={(event) =>
+                    setEditing({
+                      ...editing,
+                      description: event.target.value,
+                    })
+                  }
+                  className={inputClassName}
+                />
+              </Field>
+
               <Field label="Lieu">
-                <input value={editing.location} onChange={(e) => setEditing({ ...editing, location: e.target.value })} className={inputCls} />
+                <input
+                  value={editing.location}
+                  onChange={(event) =>
+                    setEditing({ ...editing, location: event.target.value })
+                  }
+                  className={inputClassName}
+                />
               </Field>
-              <Field label="Image de couverture (URL)">
-                <input value={editing.cover_url} onChange={(e) => setEditing({ ...editing, cover_url: e.target.value })} className={inputCls} />
-              </Field>
-            </div>
-            <Field label="Date de projection">
-              <input type="datetime-local" value={editing.scheduled_at} onChange={(e) => setEditing({ ...editing, scheduled_at: e.target.value })} className={inputCls} />
-            </Field>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <Field label="Ouverture du sondage">
-                <input type="datetime-local" value={editing.poll_opens_at} onChange={(e) => setEditing({ ...editing, poll_opens_at: e.target.value })} className={inputCls} />
-              </Field>
-              <Field label="Fermeture du sondage">
-                <input type="datetime-local" value={editing.poll_closes_at} onChange={(e) => setEditing({ ...editing, poll_closes_at: e.target.value })} className={inputCls} />
-              </Field>
-            </div>
-            <div className="grid gap-3 sm:grid-cols-3">
-              <Field label="Votes / personne">
-                <input type="number" min={1} max={50} value={editing.votes_per_voter} onChange={(e) => setEditing({ ...editing, votes_per_voter: Number(e.target.value) })} className={inputCls} />
-              </Field>
-              <Field label="Propositions / personne">
-                <input type="number" min={1} max={50} value={editing.max_proposals_per_voter} onChange={(e) => setEditing({ ...editing, max_proposals_per_voter: Number(e.target.value) })} className={inputCls} />
-              </Field>
-              <Field label="Statut">
-                <select value={editing.status} onChange={(e) => setEditing({ ...editing, status: e.target.value as any })} className={inputCls}>
-                  <option value="open">Ouvert</option>
-                  <option value="closed">Fermé</option>
-                  <option value="finished">Terminé</option>
-                </select>
-              </Field>
-            </div>
-            <label className="flex items-center gap-2 text-sm">
-              <input type="checkbox" checked={editing.allow_public_proposals} onChange={(e) => setEditing({ ...editing, allow_public_proposals: e.target.checked })} />
-              Autoriser les propositions publiques
-            </label>
-          </div>
 
-          {editing.id && <ExistingOptions screeningId={editing.id} onDelete={(id) => delOptMut.mutate(id)} onWinner={(tmdbId) => setEditing({ ...editing, winner_movie_id: tmdbId })} winnerId={editing.winner_movie_id} />}
+              <Field label="Image de couverture">
+                <input
+                  value={editing.cover_url}
+                  onChange={(event) =>
+                    setEditing({ ...editing, cover_url: event.target.value })
+                  }
+                  placeholder="https://..."
+                  className={inputClassName}
+                />
+              </Field>
 
-          <div className="mt-5 flex gap-2">
-            <button
-              onClick={() => saveMut.mutate(editing)}
-              disabled={saveMut.isPending || !editing.title}
-              className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-50"
-            >
-              Enregistrer
-            </button>
-            <button onClick={() => setEditing(null)} className="rounded-lg border border-border px-4 py-2 text-sm hover:bg-secondary">
-              Annuler
-            </button>
+              <Field label="Date de projection">
+                <input
+                  type="datetime-local"
+                  value={editing.scheduled_at}
+                  onChange={(event) =>
+                    setEditing({
+                      ...editing,
+                      scheduled_at: event.target.value,
+                    })
+                  }
+                  className={inputClassName}
+                />
+              </Field>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Field label="Ouverture du sondage">
+                  <input
+                    type="datetime-local"
+                    value={editing.poll_opens_at}
+                    onChange={(event) =>
+                      setEditing({
+                        ...editing,
+                        poll_opens_at: event.target.value,
+                      })
+                    }
+                    className={inputClassName}
+                  />
+                </Field>
+
+                <Field label="Fermeture du sondage">
+                  <input
+                    type="datetime-local"
+                    value={editing.poll_closes_at}
+                    onChange={(event) =>
+                      setEditing({
+                        ...editing,
+                        poll_closes_at: event.target.value,
+                      })
+                    }
+                    className={inputClassName}
+                  />
+                </Field>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-3">
+                <Field label="Votes / personne">
+                  <input
+                    type="number"
+                    min={1}
+                    max={50}
+                    value={editing.votes_per_voter}
+                    onChange={(event) =>
+                      setEditing({
+                        ...editing,
+                        votes_per_voter: Number(event.target.value),
+                      })
+                    }
+                    className={inputClassName}
+                  />
+                </Field>
+
+                <Field label="Propositions / personne">
+                  <input
+                    type="number"
+                    min={1}
+                    max={50}
+                    value={editing.max_proposals_per_voter}
+                    onChange={(event) =>
+                      setEditing({
+                        ...editing,
+                        max_proposals_per_voter: Number(event.target.value),
+                      })
+                    }
+                    className={inputClassName}
+                  />
+                </Field>
+
+                <Field label="Statut">
+                  <select
+                    value={editing.status}
+                    onChange={(event) =>
+                      setEditing({
+                        ...editing,
+                        status: event.target.value as ScreeningStatus,
+                      })
+                    }
+                    className={inputClassName}
+                  >
+                    <option value="open">Ouvert</option>
+                    <option value="closed">Fermé</option>
+                    <option value="finished">Terminé</option>
+                  </select>
+                </Field>
+              </div>
+
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={editing.allow_public_proposals}
+                  onChange={(event) =>
+                    setEditing({
+                      ...editing,
+                      allow_public_proposals: event.target.checked,
+                    })
+                  }
+                />
+                Autoriser les propositions publiques
+              </label>
+            </div>
+
+            {editing.id && (
+              <ExistingOptions
+                screeningId={editing.id}
+                winnerId={editing.winner_movie_id}
+                onDelete={(optionId) => deleteOptionMutation.mutate(optionId)}
+                onWinner={(tmdbId) =>
+                  setEditing({ ...editing, winner_movie_id: tmdbId })
+                }
+              />
+            )}
+
+            <div className="mt-5 flex gap-2">
+              <button
+                type="button"
+                onClick={() => saveMutation.mutate(editing)}
+                disabled={saveMutation.isPending || !editing.title.trim()}
+                className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-50"
+              >
+                Enregistrer
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setEditing(null)}
+                className="rounded-lg border border-border px-4 py-2 text-sm hover:bg-secondary"
+              >
+                Annuler
+              </button>
+            </div>
           </div>
-        </div>
-      )}
-    </div>
+        ) : (
+          <div className="rounded-2xl border border-dashed border-border p-5 text-sm text-muted-foreground">
+            Sélectionne une séance ou crée-en une nouvelle.
+          </div>
+        )}
+      </div>
+    </section>
   );
 }
 
-function ExistingOptions({ screeningId, onDelete, onWinner, winnerId }: { screeningId: string; onDelete: (id: string) => void; onWinner: (tmdbId: number) => void; winnerId: number | null }) {
-  const { data: options } = useQuery({
+function ExistingOptions({
+  screeningId,
+  winnerId,
+  onDelete,
+  onWinner,
+}: {
+  screeningId: string;
+  winnerId: number | null;
+  onDelete: (id: string) => void;
+  onWinner: (tmdbId: number) => void;
+}) {
+  const { data: options = [] } = useQuery({
     queryKey: ["admin_options", screeningId],
     queryFn: async () => {
-      const { data } = await supabase.from("poll_options").select("*").eq("screening_id", screeningId);
-      return data ?? [];
+      const { data, error } = await supabase
+        .from("poll_options")
+        .select("id, screening_id, tmdb_id, title, release_year")
+        .eq("screening_id", screeningId)
+        .order("created_at", { ascending: true });
+
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      return (data ?? []) as PollOptionRow[];
     },
   });
-  if (!options?.length) return null;
+
+  if (options.length === 0) {
+    return null;
+  }
+
   return (
     <div className="mt-5 border-t border-border pt-4">
-      <div className="mb-2 text-sm font-medium">Films proposés ({options.length})</div>
+      <div className="mb-2 text-sm font-medium">
+        Films proposés ({options.length})
+      </div>
+
       <div className="space-y-1.5">
-        {options.map((o) => (
-          <div key={o.id} className="flex items-center justify-between rounded border border-border p-2 text-xs">
+        {options.map((option) => (
+          <div
+            key={option.id}
+            className="flex items-center justify-between gap-2 rounded-lg border border-border p-2 text-xs"
+          >
             <div className="min-w-0 flex-1 truncate">
-              {o.title} <span className="text-muted-foreground">({o.release_year})</span>
+              {option.title}
+              {option.release_year && (
+                <span className="ml-1 text-muted-foreground">
+                  ({option.release_year})
+                </span>
+              )}
             </div>
+
             <div className="flex gap-1">
               <button
-                onClick={() => onWinner(o.tmdb_id)}
-                className={`rounded p-1 ${winnerId === o.tmdb_id ? "bg-accent text-accent-foreground" : "hover:bg-secondary"}`}
-                title="Marquer gagnant"
+                type="button"
+                onClick={() => onWinner(option.tmdb_id)}
+                className={`rounded p-1 ${
+                  winnerId === option.tmdb_id
+                    ? "bg-accent text-accent-foreground"
+                    : "hover:bg-secondary"
+                }`}
+                title="Marquer comme gagnant"
               >
                 <Trophy className="h-3.5 w-3.5" />
               </button>
-              <button onClick={() => onDelete(o.id)} className="rounded p-1 text-destructive hover:bg-destructive/10">
+
+              <button
+                type="button"
+                onClick={() => onDelete(option.id)}
+                className="rounded p-1 text-destructive hover:bg-destructive/10"
+                title="Supprimer"
+              >
                 <Trash2 className="h-3.5 w-3.5" />
               </button>
             </div>
           </div>
         ))}
       </div>
+
+      <p className="mt-2 text-xs text-muted-foreground">
+        Après avoir choisi le gagnant, clique sur “Enregistrer”.
+      </p>
     </div>
   );
 }
 
 function SettingsAdmin() {
-  const qc = useQueryClient();
-  const { data } = useQuery({
+  const queryClient = useQueryClient();
+  const [form, setForm] = useState<SettingsForm | null>(null);
+
+  const { data, isLoading } = useQuery({
     queryKey: ["admin_settings"],
     queryFn: async () => {
-      const { data } = await supabase.from("site_settings").select("*").eq("id", 1).single();
+      const { data, error } = await supabase
+        .from("site_settings")
+        .select("*")
+        .eq("id", 1)
+        .maybeSingle();
+
+      if (error) {
+        throw new Error(error.message);
+      }
+
       return data;
     },
   });
-  const [form, setForm] = useState<any>(null);
-  useEffect(() => {
-    if (data && !form) setForm({ ...data, hero_image_url: data.hero_image_url ?? "" });
-  }, [data, form]);
 
-  const mut = useMutation({
+  useEffect(() => {
+    if (form) return;
+
+    if (data) {
+      setForm({
+        site_name: data.site_name ?? "Ciné-Club",
+        tagline: data.tagline ?? "",
+        primary_color: data.primary_color ?? "#f97316",
+        accent_color: data.accent_color ?? "#fbbf24",
+        hero_image_url: data.hero_image_url ?? "",
+        about_text: data.about_text ?? "",
+        footer_text: data.footer_text ?? "",
+        default_votes_per_voter: data.default_votes_per_voter ?? 1,
+        default_max_proposals: data.default_max_proposals ?? 3,
+      });
+      return;
+    }
+
+    if (!isLoading) {
+      setForm({
+        site_name: "Ciné-Club",
+        tagline: "Votez pour le prochain film de la séance",
+        primary_color: "#f97316",
+        accent_color: "#fbbf24",
+        hero_image_url: "",
+        about_text: "",
+        footer_text: "",
+        default_votes_per_voter: 1,
+        default_max_proposals: 3,
+      });
+    }
+  }, [data, form, isLoading]);
+
+  const saveMutation = useMutation({
     mutationFn: async () => {
+      if (!form) return;
+
       const { error } = await supabase.from("site_settings").upsert({
         id: 1,
         site_name: form.site_name,
@@ -345,66 +730,231 @@ function SettingsAdmin() {
         footer_text: form.footer_text || null,
         default_votes_per_voter: Number(form.default_votes_per_voter),
         default_max_proposals: Number(form.default_max_proposals),
-      });
-      if (error) throw new Error(error.message);
+      } as any);
+
+      if (error) {
+        throw new Error(error.message);
+      }
     },
     onSuccess: () => {
       toast.success("Paramètres enregistrés");
-      qc.invalidateQueries({ queryKey: ["site_settings"] });
-      qc.invalidateQueries({ queryKey: ["admin_settings"] });
+      queryClient.invalidateQueries({ queryKey: ["site_settings"] });
+      queryClient.invalidateQueries({ queryKey: ["admin_settings"] });
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (error: Error) => {
+      toast.error(error.message);
+    },
   });
 
-  if (!form) return <div className="text-muted-foreground">Chargement…</div>;
+  if (!form) {
+    return (
+      <div className="rounded-2xl border border-border bg-card p-5 text-sm text-muted-foreground">
+        Chargement des paramètres…
+      </div>
+    );
+  }
 
   return (
-    <div className="max-w-2xl rounded-2xl border border-border bg-card p-6">
-      <h2 className="mb-4 font-display text-lg font-bold">Personnalisation du site</h2>
+    <section className="max-w-2xl rounded-2xl border border-border bg-card p-6 shadow-sm">
+      <h2 className="mb-4 text-lg font-bold">Personnalisation du site</h2>
+
       <div className="space-y-3">
         <Field label="Nom du site">
-          <input value={form.site_name} onChange={(e) => setForm({ ...form, site_name: e.target.value })} className={inputCls} />
+          <input
+            value={form.site_name}
+            onChange={(event) =>
+              setForm({ ...form, site_name: event.target.value })
+            }
+            className={inputClassName}
+          />
         </Field>
+
         <Field label="Accroche">
-          <input value={form.tagline ?? ""} onChange={(e) => setForm({ ...form, tagline: e.target.value })} className={inputCls} />
+          <input
+            value={form.tagline}
+            onChange={(event) =>
+              setForm({ ...form, tagline: event.target.value })
+            }
+            className={inputClassName}
+          />
         </Field>
-        <Field label="Image de hero (URL)">
-          <input value={form.hero_image_url ?? ""} onChange={(e) => setForm({ ...form, hero_image_url: e.target.value })} className={inputCls} />
+
+        <Field label="Couleur principale">
+          <input
+            value={form.primary_color}
+            onChange={(event) =>
+              setForm({ ...form, primary_color: event.target.value })
+            }
+            className={inputClassName}
+          />
         </Field>
+
+        <Field label="Couleur d'accent">
+          <input
+            value={form.accent_color}
+            onChange={(event) =>
+              setForm({ ...form, accent_color: event.target.value })
+            }
+            className={inputClassName}
+          />
+        </Field>
+
+        <Field label="Image de hero">
+          <input
+            value={form.hero_image_url}
+            onChange={(event) =>
+              setForm({ ...form, hero_image_url: event.target.value })
+            }
+            placeholder="https://..."
+            className={inputClassName}
+          />
+        </Field>
+
         <Field label="À propos">
-          <textarea rows={4} value={form.about_text ?? ""} onChange={(e) => setForm({ ...form, about_text: e.target.value })} className={inputCls} />
+          <textarea
+            rows={4}
+            value={form.about_text}
+            onChange={(event) =>
+              setForm({ ...form, about_text: event.target.value })
+            }
+            className={inputClassName}
+          />
         </Field>
+
         <Field label="Pied de page">
-          <input value={form.footer_text ?? ""} onChange={(e) => setForm({ ...form, footer_text: e.target.value })} className={inputCls} />
+          <input
+            value={form.footer_text}
+            onChange={(event) =>
+              setForm({ ...form, footer_text: event.target.value })
+            }
+            className={inputClassName}
+          />
         </Field>
+
         <div className="grid gap-3 sm:grid-cols-2">
-          <Field label="Votes / personne (défaut)">
-            <input type="number" min={1} max={50} value={form.default_votes_per_voter} onChange={(e) => setForm({ ...form, default_votes_per_voter: e.target.value })} className={inputCls} />
+          <Field label="Votes / personne par défaut">
+            <input
+              type="number"
+              min={1}
+              max={50}
+              value={form.default_votes_per_voter}
+              onChange={(event) =>
+                setForm({
+                  ...form,
+                  default_votes_per_voter: Number(event.target.value),
+                })
+              }
+              className={inputClassName}
+            />
           </Field>
-          <Field label="Propositions max (défaut)">
-            <input type="number" min={1} max={50} value={form.default_max_proposals} onChange={(e) => setForm({ ...form, default_max_proposals: e.target.value })} className={inputCls} />
+
+          <Field label="Propositions max par défaut">
+            <input
+              type="number"
+              min={1}
+              max={50}
+              value={form.default_max_proposals}
+              onChange={(event) =>
+                setForm({
+                  ...form,
+                  default_max_proposals: Number(event.target.value),
+                })
+              }
+              className={inputClassName}
+            />
           </Field>
         </div>
       </div>
+
       <button
-        onClick={() => mut.mutate()}
-        disabled={mut.isPending}
+        type="button"
+        onClick={() => saveMutation.mutate()}
+        disabled={saveMutation.isPending}
         className="mt-5 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-50"
       >
         Enregistrer
       </button>
-    </div>
+    </section>
   );
 }
 
-const inputCls =
+function createEmptyScreening(): ScreeningForm {
+  return {
+    id: undefined,
+    title: "",
+    description: "",
+    location: "",
+    scheduled_at: "",
+    poll_opens_at: "",
+    poll_closes_at: "",
+    allow_public_proposals: true,
+    max_proposals_per_voter: 3,
+    votes_per_voter: 1,
+    status: "open",
+    cover_url: "",
+    winner_movie_id: null,
+  };
+}
+
+function createFormFromScreening(screening: ScreeningRow): ScreeningForm {
+  return {
+    id: screening.id,
+    title: screening.title ?? "",
+    description: screening.description ?? "",
+    location: screening.location ?? "",
+    scheduled_at: toDatetimeLocal(screening.scheduled_at),
+    poll_opens_at: toDatetimeLocal(screening.poll_opens_at),
+    poll_closes_at: toDatetimeLocal(screening.poll_closes_at),
+    allow_public_proposals: screening.allow_public_proposals ?? true,
+    max_proposals_per_voter: screening.max_proposals_per_voter ?? 3,
+    votes_per_voter: screening.votes_per_voter ?? 1,
+    status: screening.status ?? "open",
+    cover_url: screening.cover_url ?? "",
+    winner_movie_id: screening.winner_movie_id ?? null,
+  };
+}
+
+function toDatetimeLocal(value: string | null | undefined): string {
+  if (!value) return "";
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+
+  const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+  return localDate.toISOString().slice(0, 16);
+}
+
+function toIsoDate(value: string): string | null {
+  if (!value) return null;
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+
+  return date.toISOString();
+}
+
+const inputClassName =
   "w-full rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring";
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({
+  label,
+  children,
+}: {
+  label: string;
+  children: ReactNode;
+}) {
   return (
     <label className="block">
-      <span className="mb-1 block text-xs font-medium text-muted-foreground">{label}</span>
+      <span className="mb-1 block text-xs font-medium text-muted-foreground">
+        {label}
+      </span>
       {children}
     </label>
   );
-}
+            }
