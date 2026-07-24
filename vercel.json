@@ -1,11 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "buildCommand": "npm run build:vercel",
-  "outputDirectory": "dist/client",
-  "rewrites": [
-    {
-      "source": "/(.*)",
-      "destination": "/_shell.html"
-    }
-  ]
+  "buildCommand": "npm run build",
+  "outputDirectory": ".vercel/output",
+  "framework": null
 }
