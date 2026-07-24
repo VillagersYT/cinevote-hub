@@ -18,23 +18,77 @@ export const Route = createFileRoute("/auth")({
   component: AuthPage,
 });
 
+function withTimeout<T>(
+  promise: PromiseLike<T>,
+  timeoutMs: number,
+  label: string,
+): Promise<T> {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(() => {
+      reject(
+        new Error(
+          `${label} a expiré après ${Math.round(timeoutMs / 1000)} secondes.`,
+        ),
+      );
+    }, timeoutMs);
+  });
+
+  return Promise.race([Promise.resolve(promise), timeoutPromise]).finally(() => {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
+  });
+}
+
 async function hasAdminRole(userId: string): Promise<boolean> {
-  try {
-    const { data, error } = await supabase.rpc("has_role", {
+  const rpcResult = await withTimeout(
+    (supabase as any).rpc("has_role", {
       _user_id: userId,
       _role: "admin",
-    });
+    }),
+    10_000,
+    "Vérification du rôle admin",
+  );
 
-    if (error) {
-      console.error("[auth] has_role error:", error);
-      return false;
-    }
-
-    return data === true;
-  } catch (error) {
-    console.error("[auth] has_role crashed:", error);
-    return false;
+  if (!rpcResult.error) {
+    return rpcResult.data === true;
   }
+
+  console.error("[auth] has_role failed:", rpcResult.error);
+
+  const directResult = await withTimeout(
+    supabase
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", userId)
+      .eq("role", "admin")
+      .maybeSingle(),
+    10_000,
+    "Lecture de la table user_roles",
+  );
+
+  if (directResult.error) {
+    console.error("[auth] user_roles failed:", directResult.error);
+    throw new Error(
+      `Impossible de vérifier le rôle admin : ${directResult.error.message}`,
+    );
+  }
+
+  return Boolean(directResult.data);
+}
+
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  if (typeof error === "string") {
+    return error;
+  }
+
+  return "Erreur de connexion.";
 }
 
 function AuthPage() {
@@ -48,14 +102,18 @@ function AuthPage() {
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    setLoading(true);
     setErrorMessage("");
+    setLoading(true);
 
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email: email.trim(),
-        password,
-      });
+      const { data, error } = await withTimeout(
+        supabase.auth.signInWithPassword({
+          email: email.trim(),
+          password,
+        }),
+        10_000,
+        "Connexion Supabase",
+      );
 
       if (error) {
         throw new Error(error.message);
@@ -69,14 +127,15 @@ function AuthPage() {
 
       if (!isAdmin) {
         await supabase.auth.signOut();
-        throw new Error("Accès refusé.");
+        throw new Error(
+          "Accès refusé : ce compte n’a pas le rôle admin dans Supabase.",
+        );
       }
 
       toast.success("Connecté");
       navigate({ to: "/admin", replace: true });
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Erreur de connexion.";
+      const message = getErrorMessage(error);
 
       setErrorMessage(message);
       toast.error(message);
