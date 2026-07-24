@@ -18,6 +18,10 @@ export const Route = createFileRoute("/screenings/$id/results")({
     meta: [
       { title: `Résultats — Séance ${params.id}` },
       { name: "description", content: `Résultats du vote pour la séance ${params.id}` },
+      { property: "og:title", content: `Résultats — Séance ${params.id}` },
+      { property: "og:description", content: `Classement des films proposés pour la séance ${params.id}.` },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
     ],
   }),
   component: ScreeningResultsPage,

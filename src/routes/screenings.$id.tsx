@@ -12,6 +12,10 @@ export const Route = createFileRoute("/screenings/$id")({
     meta: [
       { title: `Séance — Ciné-Club` },
       { name: "description", content: `Sondage de la séance ${params.id}` },
+      { property: "og:title", content: "Séance — Ciné-Club" },
+      { property: "og:description", content: `Proposez et votez pour le film de la séance ${params.id}.` },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
     ],
   }),
   component: ScreeningPage,
