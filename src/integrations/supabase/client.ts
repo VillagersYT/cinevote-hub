@@ -2,103 +2,29 @@
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "./types";
 
-type RuntimeEnv = Partial<Record<string, string>>;
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
-function getProcessEnv(): RuntimeEnv {
-  if (typeof process === "undefined" || !process.env) {
-    return {};
-  }
-
-  return process.env;
+if (!SUPABASE_URL) {
+  throw new Error("Missing VITE_SUPABASE_URL");
 }
 
-function isNewSupabaseApiKey(value: string): boolean {
-  return value.startsWith("sb_publishable_") || value.startsWith("sb_secret_");
+if (!SUPABASE_PUBLISHABLE_KEY) {
+  throw new Error("Missing VITE_SUPABASE_PUBLISHABLE_KEY");
 }
-
-function createSupabaseFetch(supabaseKey: string): typeof fetch {
-  return (input, init) => {
-    const headers = new Headers(
-      typeof Request !== "undefined" && input instanceof Request
-        ? input.headers
-        : undefined,
-    );
-
-    if (init?.headers) {
-      new Headers(init.headers).forEach((value, key) => {
-        headers.set(key, value);
-      });
-    }
-
-    // New Supabase API keys are opaque strings, not bearer JWTs.
-    if (
-      isNewSupabaseApiKey(supabaseKey) &&
-      headers.get("Authorization") === `Bearer ${supabaseKey}`
-    ) {
-      headers.delete("Authorization");
-    }
-
-    headers.set("apikey", supabaseKey);
-
-    return fetch(input, {
-      ...init,
-      headers,
-    });
-  };
-}
-
-function createSupabaseClient() {
-  const runtimeEnv = getProcessEnv();
-
-  const SUPABASE_URL =
-    import.meta.env.VITE_SUPABASE_URL ||
-    runtimeEnv.SUPABASE_URL ||
-    runtimeEnv.NEXT_PUBLIC_SUPABASE_URL;
-
-  const SUPABASE_PUBLISHABLE_KEY =
-    import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY ||
-    runtimeEnv.SUPABASE_PUBLISHABLE_KEY ||
-    runtimeEnv.SUPABASE_ANON_KEY ||
-    runtimeEnv.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-  if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) {
-    const missing = [
-      ...(!SUPABASE_URL ? ["SUPABASE_URL"] : []),
-      ...(!SUPABASE_PUBLISHABLE_KEY
-        ? ["SUPABASE_PUBLISHABLE_KEY or SUPABASE_ANON_KEY"]
-        : []),
-    ];
-
-    const message = `Missing Supabase environment variable(s): ${missing.join(
-      ", ",
-    )}. Connect the Supabase integration in Vercel or define the variables manually.`;
-
-    console.error(`[Supabase] ${message}`);
-    throw new Error(message);
-  }
-
-  return createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
-    global: {
-      fetch: createSupabaseFetch(SUPABASE_PUBLISHABLE_KEY),
-    },
-    auth: {
-      storage: typeof window !== "undefined" ? window.localStorage : undefined,
-      persistSession: true,
-      autoRefreshToken: true,
-    },
-  });
-}
-
-let _supabase: ReturnType<typeof createSupabaseClient> | undefined;
 
 // Import the supabase client like this:
 // import { supabase } from "@/integrations/supabase/client";
-export const supabase = new Proxy({} as ReturnType<typeof createSupabaseClient>, {
-  get(_, prop, receiver) {
-    if (!_supabase) {
-      _supabase = createSupabaseClient();
-    }
-
-    return Reflect.get(_supabase, prop, receiver);
+export const supabase = createClient<Database>(
+  SUPABASE_URL,
+  SUPABASE_PUBLISHABLE_KEY,
+  {
+    auth: {
+      persistSession: true,
+      autoRefreshToken: true,
+      detectSessionInUrl: true,
+      storage:
+        typeof window !== "undefined" ? window.localStorage : undefined,
+    },
   },
-});
+);
