@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
 import type { User } from "@supabase/supabase-js";
+
+import { supabase } from "@/integrations/supabase/client";
 
 async function hasAdminRole(userId: string): Promise<boolean> {
   const { data, error } = await (supabase as any).rpc("has_role", {
@@ -9,7 +10,7 @@ async function hasAdminRole(userId: string): Promise<boolean> {
   });
 
   if (error) {
-    console.error("[use-auth] admin role check failed:", error);
+    console.error("[use-auth] has_role error:", error);
     return false;
   }
 
@@ -24,7 +25,7 @@ export function useAuth() {
   useEffect(() => {
     let cancelled = false;
 
-    const loadSession = async () => {
+    async function loadSession() {
       setLoading(true);
 
       const { data } = await supabase.auth.getSession();
@@ -38,11 +39,11 @@ export function useAuth() {
       setUser(currentUser);
       setIsAdmin(currentIsAdmin);
       setLoading(false);
-    };
+    }
 
     void loadSession();
 
-    const { data: authListener } = supabase.auth.onAuthStateChange(
+    const { data: listener } = supabase.auth.onAuthStateChange(
       (_event, session) => {
         const currentUser = session?.user ?? null;
 
@@ -66,7 +67,7 @@ export function useAuth() {
 
     return () => {
       cancelled = true;
-      authListener.subscription.unsubscribe();
+      listener.subscription.unsubscribe();
     };
   }, []);
 
