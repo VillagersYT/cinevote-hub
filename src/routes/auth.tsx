@@ -18,8 +18,29 @@ export const Route = createFileRoute("/auth")({
   component: AuthPage,
 });
 
-function withTimeout<T>(
-  promise: PromiseLike<T>,
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  if (typeof error === "string") {
+    return error;
+  }
+
+  if (
+    typeof error === "object" &&
+    error !== null &&
+    "message" in error &&
+    typeof (error as { message?: unknown }).message === "string"
+  ) {
+    return (error as { message: string }).message;
+  }
+
+  return "Erreur de connexion.";
+}
+
+async function withTimeout<T>(
+  operation: PromiseLike<T>,
   timeoutMs: number,
   label: string,
 ): Promise<T> {
@@ -35,30 +56,36 @@ function withTimeout<T>(
     }, timeoutMs);
   });
 
-  return Promise.race([Promise.resolve(promise), timeoutPromise]).finally(() => {
+  try {
+    return await Promise.race([Promise.resolve(operation), timeoutPromise]);
+  } finally {
     if (timeoutId) {
       clearTimeout(timeoutId);
     }
-  });
+  }
 }
 
 async function hasAdminRole(userId: string): Promise<boolean> {
-  const rpcResult = await withTimeout(
-    (supabase as any).rpc("has_role", {
-      _user_id: userId,
-      _role: "admin",
-    }),
-    10_000,
-    "Vérification du rôle admin",
-  );
+  try {
+    const { data, error } = await withTimeout(
+      supabase.rpc("has_role", {
+        _user_id: userId,
+        _role: "admin",
+      }),
+      10_000,
+      "Vérification du rôle admin",
+    );
 
-  if (!rpcResult.error) {
-    return rpcResult.data === true;
+    if (!error) {
+      return data === true;
+    }
+
+    console.error("[auth] has_role failed:", error);
+  } catch (error) {
+    console.error("[auth] has_role crashed:", error);
   }
 
-  console.error("[auth] has_role failed:", rpcResult.error);
-
-  const directResult = await withTimeout(
+  const { data, error } = await withTimeout(
     supabase
       .from("user_roles")
       .select("role")
@@ -69,26 +96,15 @@ async function hasAdminRole(userId: string): Promise<boolean> {
     "Lecture de la table user_roles",
   );
 
-  if (directResult.error) {
-    console.error("[auth] user_roles failed:", directResult.error);
+  if (error) {
+    console.error("[auth] user_roles failed:", error);
+
     throw new Error(
-      `Impossible de vérifier le rôle admin : ${directResult.error.message}`,
+      `Impossible de vérifier le rôle admin : ${error.message}`,
     );
   }
 
-  return Boolean(directResult.data);
-}
-
-function getErrorMessage(error: unknown): string {
-  if (error instanceof Error) {
-    return error.message;
-  }
-
-  if (typeof error === "string") {
-    return error;
-  }
-
-  return "Erreur de connexion.";
+  return data?.role === "admin";
 }
 
 function AuthPage() {
@@ -96,19 +112,30 @@ function AuthPage() {
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+
   const [errorMessage, setErrorMessage] = useState("");
   const [loading, setLoading] = useState(false);
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
+    const cleanEmail = email.trim();
+
     setErrorMessage("");
     setLoading(true);
 
     try {
+      if (!cleanEmail) {
+        throw new Error("Entre ton email.");
+      }
+
+      if (!password) {
+        throw new Error("Entre ton mot de passe.");
+      }
+
       const { data, error } = await withTimeout(
         supabase.auth.signInWithPassword({
-          email: email.trim(),
+          email: cleanEmail,
           password,
         }),
         10_000,
@@ -120,20 +147,29 @@ function AuthPage() {
       }
 
       if (!data.user) {
-        throw new Error("Connexion impossible.");
+        throw new Error("Connexion impossible : aucun utilisateur retourné.");
       }
 
       const isAdmin = await hasAdminRole(data.user.id);
 
       if (!isAdmin) {
-        await supabase.auth.signOut();
+        try {
+          await withTimeout(
+            supabase.auth.signOut(),
+            10_000,
+            "Déconnexion Supabase",
+          );
+        } catch (signOutError) {
+          console.error("[auth] signOut after denied access failed:", signOutError);
+        }
+
         throw new Error(
           "Accès refusé : ce compte n’a pas le rôle admin dans Supabase.",
         );
       }
 
       toast.success("Connecté");
-      navigate({ to: "/admin", replace: true });
+      await navigate({ to: "/admin", replace: true });
     } catch (error) {
       const message = getErrorMessage(error);
 
@@ -145,44 +181,46 @@ function AuthPage() {
   };
 
   return (
-    <main className="mx-auto flex min-h-[calc(100vh-96px)] max-w-md flex-col justify-center px-4 py-12">
+    <main className="container mx-auto max-w-md px-4 py-16">
       <section className="rounded-2xl border border-border bg-card p-6 shadow-sm">
-        <h1 className="text-2xl font-bold">Espace admin</h1>
+        <div className="mb-6">
+          <h1 className="text-3xl font-bold tracking-tight">Espace admin</h1>
 
-        <p className="mt-2 text-sm text-muted-foreground">
-          Connecte-toi avec un compte qui possède le rôle admin.
-        </p>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Connecte-toi avec un compte qui possède le rôle admin.
+          </p>
+        </div>
 
-        <form onSubmit={submit} className="mt-6 space-y-4">
-          <label className="block">
-            <span className="mb-1 block text-xs font-medium text-muted-foreground">
-              Email
-            </span>
+        <form onSubmit={submit} className="space-y-4">
+          <label htmlFor="email" className="block space-y-2">
+            <span className="text-sm font-medium">Email</span>
 
             <input
+              id="email"
               type="email"
               value={email}
               onChange={(event) => setEmail(event.target.value)}
               placeholder="email@exemple.fr"
               autoComplete="email"
               required
-              className="w-full rounded-lg border border-input bg-background px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-ring"
+              disabled={loading}
+              className="w-full rounded-lg border border-input bg-background px-3 py-2.5 text-sm outline-none transition focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
             />
           </label>
 
-          <label className="block">
-            <span className="mb-1 block text-xs font-medium text-muted-foreground">
-              Mot de passe
-            </span>
+          <label htmlFor="password" className="block space-y-2">
+            <span className="text-sm font-medium">Mot de passe</span>
 
             <input
+              id="password"
               type="password"
               value={password}
               onChange={(event) => setPassword(event.target.value)}
               placeholder="Mot de passe"
               autoComplete="current-password"
               required
-              className="w-full rounded-lg border border-input bg-background px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-ring"
+              disabled={loading}
+              className="w-full rounded-lg border border-input bg-background px-3 py-2.5 text-sm outline-none transition focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
             />
           </label>
 
@@ -195,7 +233,7 @@ function AuthPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+            className="inline-flex w-full items-center justify-center rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {loading ? "Connexion…" : "Se connecter"}
           </button>
