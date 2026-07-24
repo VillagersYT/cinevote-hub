@@ -1,7 +1,8 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState, type FormEvent } from "react";
-import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+
+import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/auth")({
   head: () => ({
@@ -18,14 +19,14 @@ export const Route = createFileRoute("/auth")({
   component: AuthPage,
 });
 
-async function checkAdminRole(userId: string): Promise<boolean> {
+async function hasAdminRole(userId: string): Promise<boolean> {
   const { data, error } = await (supabase as any).rpc("has_role", {
     _user_id: userId,
     _role: "admin",
   });
 
   if (error) {
-    console.error("[auth] admin role check failed:", error);
+    console.error("[auth] has_role error:", error);
     return false;
   }
 
@@ -43,8 +44,8 @@ function AuthPage() {
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    setErrorMessage("");
     setLoading(true);
+    setErrorMessage("");
 
     try {
       const { data, error } = await supabase.auth.signInWithPassword({
@@ -60,7 +61,7 @@ function AuthPage() {
         throw new Error("Connexion impossible.");
       }
 
-      const isAdmin = await checkAdminRole(data.user.id);
+      const isAdmin = await hasAdminRole(data.user.id);
 
       if (!isAdmin) {
         await supabase.auth.signOut();
@@ -89,11 +90,12 @@ function AuthPage() {
           Connecte-toi avec un compte qui possède le rôle admin.
         </p>
 
-        <form onSubmit={submit} className="mt-6 space-y-3">
+        <form onSubmit={submit} className="mt-6 space-y-4">
           <label className="block">
             <span className="mb-1 block text-xs font-medium text-muted-foreground">
               Email
             </span>
+
             <input
               type="email"
               value={email}
@@ -109,6 +111,7 @@ function AuthPage() {
             <span className="mb-1 block text-xs font-medium text-muted-foreground">
               Mot de passe
             </span>
+
             <input
               type="password"
               value={password}
