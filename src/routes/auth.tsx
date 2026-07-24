@@ -7,22 +7,43 @@ export const Route = createFileRoute("/auth")({
   head: () => ({
     meta: [
       { title: "Connexion admin — Ciné-Club" },
-      { name: "description", content: "Espace d'administration du ciné-club." },
+      {
+        name: "description",
+        content: "Connexion à l'espace d'administration du ciné-club.",
+      },
       { name: "robots", content: "noindex" },
     ],
   }),
+  ssr: false,
   component: AuthPage,
 });
+
+async function checkAdminRole(userId: string): Promise<boolean> {
+  const { data, error } = await (supabase as any).rpc("has_role", {
+    _user_id: userId,
+    _role: "admin",
+  });
+
+  if (error) {
+    console.error("[auth] admin role check failed:", error);
+    return false;
+  }
+
+  return data === true;
+}
 
 function AuthPage() {
   const navigate = useNavigate();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [errorMessage, setErrorMessage] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const submit = async (e: FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    setErrorMessage("");
     setLoading(true);
 
     try {
@@ -31,37 +52,28 @@ function AuthPage() {
         password,
       });
 
-      if (error) throw error;
+      if (error) {
+        throw new Error(error.message);
+      }
 
-      const user = data.user;
-
-      if (!user) {
+      if (!data.user) {
         throw new Error("Connexion impossible.");
       }
 
-      if (!user.email_confirmed_at) {
-        await supabase.auth.signOut();
-        throw new Error("Compte non vérifié.");
-      }
+      const isAdmin = await checkAdminRole(data.user.id);
 
-      const { data: isAdmin, error: roleError } = await supabase.rpc(
-        "has_role",
-        {
-          _user_id: user.id,
-          _role: "admin",
-        },
-      );
-
-      if (roleError || !isAdmin) {
-        console.error("[auth] admin role check failed:", roleError);
+      if (!isAdmin) {
         await supabase.auth.signOut();
         throw new Error("Accès refusé.");
       }
 
       toast.success("Connecté");
       navigate({ to: "/admin" });
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "Accès refusé.";
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Erreur de connexion.";
+
+      setErrorMessage(message);
       toast.error(message);
     } finally {
       setLoading(false);
@@ -74,29 +86,45 @@ function AuthPage() {
         <h1 className="text-2xl font-bold">Espace admin</h1>
 
         <p className="mt-2 text-sm text-muted-foreground">
-          Réservé aux administrateurs du ciné-club.
+          Connecte-toi avec un compte qui possède le rôle admin.
         </p>
 
         <form onSubmit={submit} className="mt-6 space-y-3">
-          <input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="Email"
-            autoComplete="email"
-            required
-            className="w-full rounded-lg border border-input bg-background px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-ring"
-          />
+          <label className="block">
+            <span className="mb-1 block text-xs font-medium text-muted-foreground">
+              Email
+            </span>
+            <input
+              type="email"
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              placeholder="email@exemple.fr"
+              autoComplete="email"
+              required
+              className="w-full rounded-lg border border-input bg-background px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-ring"
+            />
+          </label>
 
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="Mot de passe"
-            autoComplete="current-password"
-            required
-            className="w-full rounded-lg border border-input bg-background px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-ring"
-          />
+          <label className="block">
+            <span className="mb-1 block text-xs font-medium text-muted-foreground">
+              Mot de passe
+            </span>
+            <input
+              type="password"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              placeholder="Mot de passe"
+              autoComplete="current-password"
+              required
+              className="w-full rounded-lg border border-input bg-background px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-ring"
+            />
+          </label>
+
+          {errorMessage && (
+            <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+              {errorMessage}
+            </div>
+          )}
 
           <button
             type="submit"
