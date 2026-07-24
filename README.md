@@ -23,7 +23,7 @@ npm run dev
 
 ## Architecture
 
-This app is deployed as a **static frontend**. The browser talks directly to Supabase, and database access is controlled by RLS policies.
+This app is deployed as a **static frontend**. The browser talks directly to the database, and database access is controlled by RLS policies.
 
 - Vercel hosts only the generated frontend (`dist/client`).
 - There is no Vercel runtime backend required.
@@ -39,10 +39,8 @@ Create a local env file:
 cp .env.example .env
 ```
 
-Set required frontend env vars locally:
+Set the only required frontend env var locally:
 
-- `VITE_SUPABASE_URL`
-- `VITE_SUPABASE_PUBLISHABLE_KEY`
 - `VITE_TMDB_READ_TOKEN`
 
 ### 2) Start locally

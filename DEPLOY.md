@@ -1,26 +1,21 @@
-# Déploiement Vercel + Supabase (frontend statique)
+# Déploiement Vercel (frontend statique)
 
-Ce projet est configuré pour que Vercel héberge uniquement le frontend statique. Toute la donnée passe directement par Supabase avec les règles RLS de la base.
+Ce projet est configuré pour que Vercel héberge uniquement le frontend statique. Toute la donnée passe directement par la base avec les règles RLS.
 
 ## Étapes (une seule fois)
 
 ### 1. Importer le repo sur Vercel
 - Vercel > **Add New… > Project** > sélectionner ce repo GitHub.
-- Framework Preset : **Other** (Vercel détecte Vite/TanStack Start automatiquement grâce à `NITRO_PRESET=vercel` défini dans `vercel.json`).
-- Cliquer **Deploy** (le premier build échouera tant que Supabase n'est pas branché — c'est normal).
+- Framework Preset : **Other**.
+- Cliquer **Deploy**.
 
-### 2. Brancher Supabase via l'intégration officielle Vercel
-- Sur le projet Vercel > **Storage** (ou **Integrations**) > **Marketplace** > chercher **Supabase** > **Add Integration**.
-- Choisir le projet Supabase (existant ou nouveau) et lier au projet Vercel.
-- L'intégration crée automatiquement ces variables d'env dans Vercel selon sa version :
-  - `SUPABASE_URL` ou `NEXT_PUBLIC_SUPABASE_URL`
-  - `SUPABASE_ANON_KEY` ou `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-  - `POSTGRES_URL` (non utilisé ici)
+### 2. Configuration base de données
+Le build Vercel contient déjà la configuration publique nécessaire pour se connecter à la base. Il n'y a donc plus besoin d'ajouter `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `VITE_SUPABASE_URL` ou `VITE_SUPABASE_PUBLISHABLE_KEY` dans Vercel.
 
-Le script `build:vercel` transforme automatiquement ces noms en variables `VITE_*` utilisables par le frontend. Aucune variable backend n'est nécessaire au runtime Vercel.
+Si vous préférez pointer vers une autre base, vous pouvez toujours définir `VITE_SUPABASE_URL` et `VITE_SUPABASE_PUBLISHABLE_KEY` dans Vercel : elles remplaceront les valeurs par défaut.
 
 ### 3. Ajouter le token TMDB
-Une seule variable à définir à la main :
+Une seule variable reste à définir à la main :
 - Vercel > Project > **Settings > Environment Variables** > Add :
   - Name : `TMDB_READ_TOKEN`
   - Value : *(votre token de lecture TMDB)*
@@ -47,4 +42,4 @@ values ('<votre-user-id>', 'admin');
 ## C'est tout
 - Push sur `main` → déploiement auto.
 - Vercel sert `dist/client` uniquement, sans fonction serveur.
-- Supabase se re-configure tout seul si vous rebranchez l'intégration.
+- Aucune fonction serveur Vercel n'est nécessaire.
