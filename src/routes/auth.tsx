@@ -7,17 +7,7 @@ export const Route = createFileRoute("/auth")({
   head: () => ({
     meta: [
       { title: "Connexion admin — Ciné-Club" },
-      {
-        name: "description",
-        content: "Espace d'administration du ciné-club.",
-      },
-      { property: "og:title", content: "Connexion admin — Ciné-Club" },
-      {
-        property: "og:description",
-        content: "Connexion à l'espace d'administration du ciné-club.",
-      },
-      { property: "og:type", content: "website" },
-      { name: "twitter:card", content: "summary" },
+      { name: "description", content: "Espace d'administration du ciné-club." },
       { name: "robots", content: "noindex" },
     ],
   }),
