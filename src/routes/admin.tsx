@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { LogOut, Settings } from "lucide-react";
 
 import { useAuth } from "@/hooks/use-auth";
@@ -15,24 +15,57 @@ export const Route = createFileRoute("/admin")({
       { name: "robots", content: "noindex" },
     ],
   }),
-  ssr: false,
   component: AdminPage,
 });
 
 function AdminPage() {
   const navigate = useNavigate();
-  const { user, isAdmin, loading } = useAuth();
+  const { user, isAdmin, loading, error } = useAuth();
 
   const signOut = async () => {
-    await supabase.auth.signOut();
-    navigate({ to: "/auth" });
+    try {
+      await supabase.auth.signOut();
+    } catch (signOutError) {
+      console.error("[admin] sign out failed:", signOutError);
+    } finally {
+      navigate({ to: "/auth", replace: true });
+    }
   };
 
   if (loading) {
     return (
       <main className="mx-auto max-w-5xl px-4 py-10">
         <section className="rounded-2xl border border-border bg-card p-6 shadow-sm">
-          <p className="text-sm text-muted-foreground">Chargement…</p>
+          <h1 className="text-2xl font-bold">Administration</h1>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Chargement de ta session…
+          </p>
+        </section>
+      </main>
+    );
+  }
+
+  if (error) {
+    return (
+      <main className="mx-auto max-w-3xl px-4 py-10">
+        <section className="rounded-2xl border border-destructive/30 bg-card p-6 shadow-sm">
+          <h1 className="text-2xl font-bold">Erreur d’authentification</h1>
+
+          <p className="mt-2 text-sm text-muted-foreground">
+            La page admin s’affiche maintenant, mais la vérification Supabase a
+            échoué.
+          </p>
+
+          <div className="mt-4 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+            {error}
+          </div>
+
+          <Link
+            to="/auth"
+            className="mt-4 inline-flex rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90"
+          >
+            Retour à la connexion
+          </Link>
         </section>
       </main>
     );
@@ -48,12 +81,12 @@ function AdminPage() {
             Tu dois te connecter pour accéder à l’administration.
           </p>
 
-          <a
-            href="/auth"
+          <Link
+            to="/auth"
             className="mt-4 inline-flex rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90"
           >
             Aller à la connexion
-          </a>
+          </Link>
         </section>
       </main>
     );
@@ -66,7 +99,11 @@ function AdminPage() {
           <h1 className="text-2xl font-bold">Accès refusé</h1>
 
           <p className="mt-2 text-sm text-muted-foreground">
-            Tu es connecté, mais ton compte n’a pas le rôle admin.
+            Tu es connecté, mais ton compte n’a pas le rôle admin dans Supabase.
+          </p>
+
+          <p className="mt-3 break-all rounded-lg border border-border bg-background px-3 py-2 text-xs text-muted-foreground">
+            Compte connecté : {user.email ?? "email inconnu"}
           </p>
 
           <button
@@ -110,7 +147,7 @@ function AdminPage() {
           </div>
 
           <p className="mt-2 text-sm text-muted-foreground">
-            Ton compte est connecté et le rôle admin est bien reconnu.
+            Ton compte est connecté et le rôle admin est reconnu.
           </p>
 
           <p className="mt-2 break-all text-xs text-muted-foreground">
