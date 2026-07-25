@@ -37,7 +37,7 @@ import {
   saveAdminSettings,
   setAdminWinner,
   updateAdminScreeningStatus,
-} from "@/lib/admin.functions";
+} from "@/lib/admin-supabase";
 import { getErrorMessage } from "@/lib/supabase-safe";
 
 type Screening = Tables<"screenings">;
