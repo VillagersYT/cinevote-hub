@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { AlertCircle, ArrowRight, Calendar, MapPin, Vote } from "lucide-react";
+import { AlertCircle, AlertTriangle, ArrowRight, Calendar, MapPin, Vote } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
 
@@ -54,11 +54,7 @@ async function withTimeout<T>(
 
   const timeoutPromise = new Promise<never>((_, reject) => {
     timeoutId = setTimeout(() => {
-      reject(
-        new Error(
-          `${label} a expiré après ${Math.round(timeoutMs / 1000)} secondes.`,
-        ),
-      );
+      reject(new Error(`${label} a expiré après ${Math.round(timeoutMs / 1000)} secondes.`));
     }, timeoutMs);
   });
 
@@ -141,7 +137,7 @@ function Home() {
   return (
     <main className="min-h-screen">
       <section className="container mx-auto max-w-5xl px-4 py-10">
-        <div className="relative overflow-hidden rounded-[2rem] bg-gradient-to-br from-orange-700 via-orange-600 to-amber-600 p-8 shadow-2xl shadow-orange-950/30 sm:p-10">
+        <div className="relative overflow-hidden rounded-[2rem] bg-hero-gradient p-8 shadow-glow sm:p-10">
           {settings?.hero_image_url && (
             <div
               aria-hidden="true"
@@ -163,13 +159,28 @@ function Home() {
           </div>
         </div>
 
+        <aside className="mt-6 flex gap-3 rounded-2xl border border-amber-500/40 bg-amber-500/10 px-4 py-4 text-sm">
+          <AlertTriangle
+            className="mt-0.5 size-5 shrink-0 text-amber-600 dark:text-amber-400"
+            aria-hidden="true"
+          />
+
+          <div>
+            <p className="font-semibold">À propos des films très récents</p>
+
+            <p className="mt-1 leading-relaxed text-muted-foreground">
+              Les films sortis au cours des trois derniers mois sont difficiles à obtenir et les
+              versions disponibles sont souvent de mauvaise qualité. Pour une meilleure séance,
+              privilégiez un film sorti depuis plus de trois mois.
+            </p>
+          </div>
+        </aside>
+
         <section className="mt-12">
           <div className="flex items-center gap-3">
             <Vote className="size-8 text-primary" aria-hidden="true" />
 
-            <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">
-              Prochaines séances
-            </h2>
+            <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">Prochaines séances</h2>
           </div>
 
           {supabaseError && (
@@ -177,23 +188,17 @@ function Home() {
               <AlertCircle className="mt-0.5 size-5 shrink-0" aria-hidden="true" />
 
               <div>
-                <p className="font-semibold">
-                  Impossible de charger les données Supabase.
-                </p>
+                <p className="font-semibold">Impossible de charger les données Supabase.</p>
 
                 <p className="mt-1">{getErrorMessage(supabaseError)}</p>
               </div>
             </div>
           )}
 
-          {isLoading && !supabaseError && (
-            <p className="mt-5 text-muted-foreground">Chargement…</p>
-          )}
+          {isLoading && !supabaseError && <p className="mt-5 text-muted-foreground">Chargement…</p>}
 
           {!isLoading && !supabaseError && screenings.length === 0 && (
-            <p className="mt-5 text-muted-foreground">
-              Aucune séance programmée pour le moment.
-            </p>
+            <p className="mt-5 text-muted-foreground">Aucune séance programmée pour le moment.</p>
           )}
 
           {!supabaseError && screenings.length > 0 && (
@@ -224,9 +229,7 @@ function Home() {
                       </span>
                     </div>
 
-                    <h3 className="text-xl font-bold tracking-tight">
-                      {screening.title}
-                    </h3>
+                    <h3 className="text-xl font-bold tracking-tight">{screening.title}</h3>
 
                     {screening.description && (
                       <p className="mt-2 line-clamp-3 text-sm leading-relaxed text-muted-foreground">
@@ -240,13 +243,10 @@ function Home() {
                           <Calendar className="size-4" aria-hidden="true" />
 
                           <span>
-                            {new Date(screening.scheduled_at).toLocaleString(
-                              "fr-FR",
-                              {
-                                dateStyle: "medium",
-                                timeStyle: "short",
-                              },
-                            )}
+                            {new Date(screening.scheduled_at).toLocaleString("fr-FR", {
+                              dateStyle: "medium",
+                              timeStyle: "short",
+                            })}
                           </span>
                         </p>
                       )}

@@ -52,11 +52,7 @@ async function withTimeout<T>(
 
   const timeoutPromise = new Promise<never>((_, reject) => {
     timeoutId = setTimeout(() => {
-      reject(
-        new Error(
-          `${label} a expiré après ${Math.round(timeoutMs / 1000)} secondes.`,
-        ),
-      );
+      reject(new Error(`${label} a expiré après ${Math.round(timeoutMs / 1000)} secondes.`));
     }, timeoutMs);
   });
 
@@ -80,11 +76,7 @@ function AuthPage() {
 
   const loading = loadingMode !== null;
 
-  const login = async (
-    loginEmail: string,
-    loginPassword: string,
-    mode: LoginMode,
-  ) => {
+  const login = async (loginEmail: string, loginPassword: string, mode: LoginMode) => {
     setErrorMessage("");
     setLoadingMode(mode);
 
@@ -137,8 +129,7 @@ function AuthPage() {
     event.preventDefault();
 
     if (!QUICK_ADMIN_EMAIL) {
-      const message =
-        "Connexion rapide non configurée : ajoute VITE_ADMIN_EMAIL dans Vercel.";
+      const message = "Connexion rapide non configurée : ajoute VITE_ADMIN_EMAIL dans Vercel.";
 
       setErrorMessage(message);
       toast.error(message);
@@ -209,9 +200,7 @@ function AuthPage() {
 
         <div className="my-6 flex items-center gap-3">
           <div className="h-px flex-1 bg-border" />
-          <span className="text-xs uppercase tracking-wide text-muted-foreground">
-            ou
-          </span>
+          <span className="text-xs uppercase tracking-wide text-muted-foreground">ou</span>
           <div className="h-px flex-1 bg-border" />
         </div>
 
@@ -219,15 +208,12 @@ function AuthPage() {
           <div>
             <h2 className="font-semibold">Connexion rapide</h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              Entre uniquement le mot de passe du compte administrateur
-              configuré.
+              Entre uniquement le mot de passe du compte administrateur configuré.
             </p>
           </div>
 
           <label htmlFor="quick-password" className="block space-y-2">
-            <span className="text-sm font-medium">
-              Mot de passe administrateur
-            </span>
+            <span className="text-sm font-medium">Mot de passe administrateur</span>
 
             <input
               id="quick-password"
@@ -247,18 +233,14 @@ function AuthPage() {
             disabled={loading || !QUICK_ADMIN_EMAIL}
             className="inline-flex w-full items-center justify-center rounded-lg border border-border px-4 py-2.5 text-sm font-semibold transition hover:bg-secondary disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {loadingMode === "quick"
-              ? "Connexion…"
-              : "Entrer avec le mot de passe"}
+            {loadingMode === "quick" ? "Connexion…" : "Entrer avec le mot de passe"}
           </button>
 
           {!QUICK_ADMIN_EMAIL && (
             <p className="text-xs text-muted-foreground">
               Ajoute la variable Vercel{" "}
-              <code className="rounded bg-secondary px-1 py-0.5">
-                VITE_ADMIN_EMAIL
-              </code>{" "}
-              pour activer cette option.
+              <code className="rounded bg-secondary px-1 py-0.5">VITE_ADMIN_EMAIL</code> pour
+              activer cette option.
             </p>
           )}
         </form>
