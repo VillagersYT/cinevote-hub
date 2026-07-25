@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { supabaseAdmin } from "@/integrations/supabase/client.server";
+import { supabaseAdmin, verifySupabaseAccessToken } from "@/integrations/supabase/client.server";
 
 const uuidSchema = z.string().uuid();
 const nullableShortText = z.string().trim().max(500).nullable();
@@ -126,13 +126,7 @@ async function requireAuthenticatedUser(authorization: string | null) {
     throw new Error("Session administrateur invalide. Déconnecte-toi puis reconnecte-toi.");
   }
 
-  const { data, error } = await supabaseAdmin.auth.getUser(accessToken);
-
-  if (error || !data.user) {
-    throw new Error("Session administrateur expirée. Déconnecte-toi puis reconnecte-toi.");
-  }
-
-  return data.user;
+  return verifySupabaseAccessToken(accessToken);
 }
 
 export async function handleAdminAction({

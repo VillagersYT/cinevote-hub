@@ -40,8 +40,10 @@ type AdminApiResponse<T> = {
   error?: string;
 };
 
-async function callAdminApi<T>(action: string, data: unknown): Promise<T> {
-  const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+async function getAdminAccessToken(forceRefresh = false): Promise<string> {
+  const { data: sessionData, error: sessionError } = forceRefresh
+    ? await supabase.auth.refreshSession()
+    : await supabase.auth.getSession();
   const accessToken = sessionData.session?.access_token;
 
   if (sessionError || !accessToken) {
@@ -50,7 +52,11 @@ async function callAdminApi<T>(action: string, data: unknown): Promise<T> {
     );
   }
 
-  const response = await fetch("/api/admin", {
+  return accessToken;
+}
+
+function postAdminAction(action: string, data: unknown, accessToken: string): Promise<Response> {
+  return fetch("/api/admin", {
     method: "POST",
     headers: {
       accept: "application/json",
@@ -60,6 +66,16 @@ async function callAdminApi<T>(action: string, data: unknown): Promise<T> {
     body: JSON.stringify({ action, data }),
     cache: "no-store",
   });
+}
+
+async function callAdminApi<T>(action: string, data: unknown): Promise<T> {
+  let accessToken = await getAdminAccessToken();
+  let response = await postAdminAction(action, data, accessToken);
+
+  if (response.status === 401) {
+    accessToken = await getAdminAccessToken(true);
+    response = await postAdminAction(action, data, accessToken);
+  }
 
   const responseText = await response.text();
   let payload: AdminApiResponse<T>;
