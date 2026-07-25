@@ -10,39 +10,33 @@ const functionDirectory = join(
   "functions",
   "__server.func",
 );
-
 const fallbackManifestPath = join(
   functionDirectory,
   "_tanstack-start-manifest_v.mjs",
 );
 
 const files = await readdir(functionDirectory);
-
 const productionManifestName = files.find((file) =>
   /^_tanstack-start-manifest_v-[\w-]+\.mjs$/.test(file),
 );
 
 if (!productionManifestName) {
   throw new Error(
-    "Impossible de trouver le manifeste TanStack Start de production.",
+    "Impossible de trouver le manifeste TanStack Start de production dans la sortie Vercel.",
   );
 }
 
-const productionManifestPath = join(
-  functionDirectory,
-  productionManifestName,
-);
-
+const productionManifestPath = join(functionDirectory, productionManifestName);
 const productionManifest = await readFile(productionManifestPath, "utf8");
 
 if (!productionManifest.includes('src: "/assets/')) {
   throw new Error(
-    "Le manifeste détecté ne contient pas les assets de production.",
+    "Le manifeste TanStack Start détecté ne contient pas les assets de production.",
   );
 }
 
 await writeFile(fallbackManifestPath, productionManifest);
 
 console.log(
-  `[build:vercel] Manifeste de production appliqué (${productionManifestName}).`,
+  `[build:vercel] Manifeste TanStack Start de production appliqué (${productionManifestName}).`,
 );
