@@ -37,11 +37,15 @@ async function hasAdminRole(userId: string): Promise<boolean> {
     _role: "admin",
   });
 
-  if (!error) {
-    return data === true;
+  if (!error && data === true) {
+    return true;
   }
 
-  console.warn("[use-auth] has_role failed, fallback user_roles:", error);
+  if (error) {
+    console.warn("[use-auth] has_role failed, fallback user_roles:", error);
+  } else {
+    console.warn("[use-auth] has_role returned false, fallback user_roles.");
+  }
 
   const fallback = await supabase
     .from("user_roles")
