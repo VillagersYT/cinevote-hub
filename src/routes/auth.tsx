@@ -76,11 +76,17 @@ async function hasAdminRole(userId: string): Promise<boolean> {
       "Vérification du rôle admin",
     );
 
-    if (!error) {
-      return data === true;
+    if (!error && data === true) {
+      return true;
     }
 
-    console.error("[auth] has_role failed:", error);
+    if (error) {
+      console.error("[auth] has_role failed:", error);
+    } else {
+      console.warn(
+        "[auth] has_role returned false, fallback sur user_roles.",
+      );
+    }
   } catch (error) {
     console.error("[auth] has_role crashed:", error);
   }
@@ -160,7 +166,10 @@ function AuthPage() {
             "Déconnexion Supabase",
           );
         } catch (signOutError) {
-          console.error("[auth] signOut after denied access failed:", signOutError);
+          console.error(
+            "[auth] signOut after denied access failed:",
+            signOutError,
+          );
         }
 
         throw new Error(
@@ -241,4 +250,4 @@ function AuthPage() {
       </section>
     </main>
   );
-}
+      }
