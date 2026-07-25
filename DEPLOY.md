@@ -1,45 +1,70 @@
-# Déploiement Vercel (frontend statique)
+# Déploiement sur Vercel
 
-Ce projet est configuré pour que Vercel héberge uniquement le frontend statique. Toute la donnée passe directement par la base avec les règles RLS.
+Le projet utilise TanStack Start avec des fonctions serveur Vercel. Les
+identifiants publics Supabase restent disponibles dans le navigateur, tandis
+que le token TMDB et la clé Supabase privilégiée restent uniquement côté
+serveur.
 
-## Étapes (une seule fois)
+## 1. Importer le dépôt
 
-### 1. Importer le repo sur Vercel
-- Vercel > **Add New… > Project** > sélectionner ce repo GitHub.
-- Framework Preset : **Other**.
-- Cliquer **Deploy**.
+Dans Vercel, ouvrir **Add New… > Project**, sélectionner ce dépôt GitHub et
+laisser Vercel utiliser la commande `npm run build:vercel`.
 
-### 2. Configuration base de données
-Le build Vercel contient déjà la configuration publique nécessaire pour se connecter à la base. Il n'y a donc plus besoin d'ajouter `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `VITE_SUPABASE_URL` ou `VITE_SUPABASE_PUBLISHABLE_KEY` dans Vercel.
+## 2. Ajouter les variables Vercel
 
-Si vous préférez pointer vers une autre base, vous pouvez toujours définir `VITE_SUPABASE_URL` et `VITE_SUPABASE_PUBLISHABLE_KEY` dans Vercel : elles remplaceront les valeurs par défaut.
+Dans **Project > Settings > Environment Variables**, ajouter ces variables pour
+Production, Preview et Development :
 
-### 3. Ajouter le token TMDB
-Une seule variable reste à définir à la main :
-- Vercel > Project > **Settings > Environment Variables** > Add :
-  - Name : `TMDB_READ_TOKEN`
-  - Value : *(votre token de lecture TMDB)*
-  - Environments : Production, Preview, Development
+- `SUPABASE_URL` : URL du projet Supabase.
+- `SUPABASE_SERVICE_ROLE_KEY` : clé serveur Supabase `service_role` ou clé
+  secrète équivalente. Ne jamais préfixer cette variable par `VITE_`.
+- `TMDB_READ_TOKEN` : token de lecture TMDB. Ne jamais préfixer cette variable
+  par `VITE_`.
+- `VITE_ADMIN_EMAIL` : email d’un compte Supabase existant, utilisé pour la
+  connexion rapide avec mot de passe uniquement.
 
-Comme Vercel n'héberge plus de backend pour ce projet, la recherche TMDB se fait côté navigateur : ce token est donc exposé dans le bundle frontend.
+La configuration publique du projet actuel possède des valeurs par défaut. Pour
+utiliser un autre projet Supabase, définir également :
 
-### 4. Redéployer
-Vercel > Deployments > dernier déploiement > **Redeploy**.
+- `VITE_SUPABASE_URL`
+- `VITE_SUPABASE_PUBLISHABLE_KEY`
+- `VITE_SUPABASE_PROJECT_ID`
 
-### 5. Appliquer les migrations Supabase
-Une fois la DB Supabase créée, appliquer les migrations SQL présentes dans `supabase/migrations/` :
-- Supabase Dashboard > SQL Editor > coller le contenu de chaque migration dans l'ordre.
-- Ou via CLI : `supabase link --project-ref <ref>` puis `supabase db push`.
+Le mot de passe administrateur n’est jamais une variable Vercel et n’est jamais
+intégré au site : il est envoyé directement à Supabase lors de la connexion.
 
-### 6. Se donner le rôle admin
-Dans Supabase > SQL Editor :
-```sql
-insert into public.user_roles (user_id, role)
-values ('<votre-user-id>', 'admin');
-```
-(Créez d'abord un compte via `/auth` sur le site déployé.)
+## 3. Appliquer les migrations Supabase
 
-## C'est tout
-- Push sur `main` → déploiement auto.
-- Vercel sert `dist/client` uniquement, sans fonction serveur.
-- Aucune fonction serveur Vercel n'est nécessaire.
+Dans **Supabase > SQL Editor**, exécuter tous les fichiers du dossier
+`supabase/migrations/` dans l’ordre. Le dernier fichier à appliquer est :
+
+`20260725152000_all_authenticated_users_are_admin.sql`
+
+Cette migration :
+
+- considère chaque compte Supabase authentifié comme administrateur ;
+- retire aux visiteurs anonymes l’écriture directe dans les propositions et les
+  votes ;
+- oblige les visiteurs à passer par les fonctions serveur qui vérifient les
+  limites, les dates du sondage et les catégories TMDB.
+
+## 4. Verrouiller la création de comptes
+
+Dans **Supabase > Authentication > Providers > Email**, désactiver les
+inscriptions publiques. Tous les comptes existants peuvent administrer le site,
+donc seuls les comptes créés volontairement dans Supabase doivent pouvoir se
+connecter.
+
+## 5. Redéployer
+
+Dans **Vercel > Deployments**, redéployer le dernier commit après l’ajout des
+variables. Un push sur `main` déclenchera ensuite les prochains déploiements.
+
+## Contrôle rapide
+
+- `/` charge les réglages et les séances.
+- `/auth` accepte email + mot de passe ou le mot de passe seul si
+  `VITE_ADMIN_EMAIL` est défini.
+- `/admin` permet de gérer les séances, films, votes et réglages.
+- La recherche TMDB ne doit pas faire apparaître le token dans les outils réseau
+  du navigateur.
