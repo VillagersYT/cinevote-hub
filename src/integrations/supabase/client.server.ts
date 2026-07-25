@@ -9,6 +9,7 @@ const DEFAULT_SUPABASE_PUBLISHABLE_KEY = "sb_publishable_aOJpvDR_QFFDIDK8VoaW_Q_
 
 type AdminKey = {
   kind: "secret" | "legacy-service-role";
+  source: string;
   value: string;
 };
 
@@ -51,10 +52,11 @@ function getLegacyJwtRole(value: string): string | null {
   return typeof role === "string" ? role : null;
 }
 
-function parseElevatedSupabaseKey(value: string): AdminKey | null {
+function parseElevatedSupabaseKey(value: string, source: string): AdminKey | null {
   if (value.startsWith("sb_secret_")) {
     return {
       kind: "secret",
+      source,
       value,
     };
   }
@@ -62,6 +64,7 @@ function parseElevatedSupabaseKey(value: string): AdminKey | null {
   if (getLegacyJwtRole(value) === "service_role") {
     return {
       kind: "legacy-service-role",
+      source,
       value,
     };
   }
@@ -77,26 +80,22 @@ function parsePublishableSupabaseKey(value: string): string | null {
   return null;
 }
 
-function getSecretKeyFromJson(value: string | undefined): string | undefined {
+function getSecretKeysFromJson(
+  value: string | undefined,
+): Array<{ source: string; value: string }> {
   if (!value) {
-    return undefined;
+    return [];
   }
 
   try {
     const parsed = JSON.parse(value) as Record<string, unknown>;
-    const defaultKey = parsed.default;
+    return Object.entries(parsed).flatMap(([name, candidate]) => {
+      const cleaned = typeof candidate === "string" ? cleanEnvironmentValue(candidate) : undefined;
 
-    if (typeof defaultKey === "string") {
-      return cleanEnvironmentValue(defaultKey);
-    }
-
-    const firstKey = Object.values(parsed).find(
-      (candidate): candidate is string => typeof candidate === "string",
-    );
-
-    return cleanEnvironmentValue(firstKey);
+      return cleaned ? [{ source: `SUPABASE_SECRET_KEYS.${name}`, value: cleaned }] : [];
+    });
   } catch {
-    return undefined;
+    return [];
   }
 }
 
@@ -151,29 +150,36 @@ function getCanonicalSupabaseUrl(): string {
 function getSupabaseServerConfiguration() {
   const supabaseUrl = getCanonicalSupabaseUrl();
   const keyCandidates = [
-    cleanEnvironmentValue(process.env.SUPABASE_SERVICE_ROLE_KEY),
-    cleanEnvironmentValue(process.env.SUPABASE_SECRET_KEY),
-    cleanEnvironmentValue(process.env.SUPABASE_KEY),
-    getSecretKeyFromJson(cleanEnvironmentValue(process.env.SUPABASE_SECRET_KEYS)),
-  ].filter((value): value is string => Boolean(value));
-  const adminKey = keyCandidates
-    .map(parseElevatedSupabaseKey)
-    .find((candidate): candidate is AdminKey => candidate !== null);
+    ["SUPABASE_SERVICE_ROLE_KEY", cleanEnvironmentValue(process.env.SUPABASE_SERVICE_ROLE_KEY)],
+    ["SUPABASE_SERVICE_KEY", cleanEnvironmentValue(process.env.SUPABASE_SERVICE_KEY)],
+    ["SERVICE_ROLE_KEY", cleanEnvironmentValue(process.env.SERVICE_ROLE_KEY)],
+    ["SUPABASE_SECRET_KEY", cleanEnvironmentValue(process.env.SUPABASE_SECRET_KEY)],
+    ["SUPABASE_KEY", cleanEnvironmentValue(process.env.SUPABASE_KEY)],
+    ["SUPABASE_SERVICE_ROLE", cleanEnvironmentValue(process.env.SUPABASE_SERVICE_ROLE)],
+  ]
+    .flatMap(([source, value]) =>
+      typeof source === "string" && typeof value === "string" ? [{ source, value }] : [],
+    )
+    .concat(getSecretKeysFromJson(cleanEnvironmentValue(process.env.SUPABASE_SECRET_KEYS)));
+  const seenValues = new Set<string>();
+  const adminKeys = keyCandidates.flatMap(({ source, value }) => {
+    const adminKey = parseElevatedSupabaseKey(value, source);
 
-  if (!adminKey) {
-    const hasPublishableKey = keyCandidates.some(
-      (value) => value.startsWith("sb_publishable_") || getLegacyJwtRole(value) === "anon",
-    );
+    if (!adminKey || seenValues.has(adminKey.value)) {
+      return [];
+    }
 
-    throw new Error(
-      hasPublishableKey
-        ? "La variable serveur contient une clé Supabase publishable/anon. Mets une Secret key sb_secret_… dans SUPABASE_SERVICE_ROLE_KEY."
-        : "Ajoute une Secret key Supabase sb_secret_… dans SUPABASE_SERVICE_ROLE_KEY sur Vercel.",
-    );
-  }
+    seenValues.add(adminKey.value);
+    return [adminKey];
+  });
+  const hasPublishableKey = keyCandidates.some(
+    ({ value }) => value.startsWith("sb_publishable_") || getLegacyJwtRole(value) === "anon",
+  );
 
   return {
-    adminKey,
+    adminKeys,
+    hasPublishableKey,
+    keyCandidateSources: keyCandidates.map(({ source }) => source),
     supabaseUrl,
   };
 }
@@ -228,12 +234,51 @@ function createSupabaseFetch(adminKey: AdminKey): typeof fetch {
   };
 }
 
-function createSupabaseAdminClient() {
-  const { adminKey, supabaseUrl } = getSupabaseServerConfiguration();
-
+function createSupabaseAdminClient(adminKey: AdminKey, supabaseUrl: string) {
   return createClient<Database>(supabaseUrl, adminKey.value, {
     global: {
       fetch: createSupabaseFetch(adminKey),
+    },
+    auth: {
+      storage: undefined,
+      persistSession: false,
+      autoRefreshToken: false,
+      detectSessionInUrl: false,
+    },
+  });
+}
+
+function createSupabaseAuthenticatedFetch(accessToken: string): typeof fetch {
+  const nativeFetch = globalThis.fetch.bind(globalThis);
+
+  return (input, init = {}) => {
+    const headers = new Headers(
+      typeof Request !== "undefined" && input instanceof Request ? input.headers : undefined,
+    );
+
+    new Headers(init.headers).forEach((value, name) => {
+      headers.set(name, value);
+    });
+
+    headers.set("authorization", `Bearer ${accessToken}`);
+
+    return nativeFetch(input, {
+      ...init,
+      headers,
+    });
+  };
+}
+
+/**
+ * Builds a database client that carries the already verified visitor session.
+ * It is the safe fallback for administration when Vercel has a bad server key.
+ */
+export function createSupabaseAuthenticatedClient(accessToken: string) {
+  const { publishableKey, supabaseUrl } = getSupabaseUserVerifierConfiguration();
+
+  return createClient<Database>(supabaseUrl, publishableKey, {
+    global: {
+      fetch: createSupabaseAuthenticatedFetch(accessToken),
     },
     auth: {
       storage: undefined,
@@ -257,13 +302,92 @@ function createSupabaseUserVerifierClient() {
   });
 }
 
-let _supabaseAdmin: ReturnType<typeof createSupabaseAdminClient> | undefined;
+export class SupabaseAdminKeyConfigurationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "SupabaseAdminKeyConfigurationError";
+  }
+}
+
+type SupabaseAdminClient = ReturnType<typeof createSupabaseAdminClient>;
+
+function isInvalidSupabaseApiKeyError(error: unknown): boolean {
+  const message =
+    typeof error === "object" && error !== null && "message" in error
+      ? String((error as { message?: unknown }).message ?? "")
+      : "";
+  const normalized = message.toLocaleLowerCase("en-US");
+
+  return normalized.includes("invalid api key") || normalized.includes("api key is invalid");
+}
+
+let _supabaseAdmin: SupabaseAdminClient | undefined;
+let _verifiedSupabaseAdmin: Promise<SupabaseAdminClient> | undefined;
 let _supabaseUserVerifier: ReturnType<typeof createSupabaseUserVerifierClient> | undefined;
 
-export const supabaseAdmin = new Proxy({} as ReturnType<typeof createSupabaseAdminClient>, {
+/**
+ * Chooses a configured elevated key only after Supabase has accepted it.
+ * A wrong stale variable cannot mask a valid key configured under another alias.
+ */
+export function getVerifiedSupabaseAdminClient(): Promise<SupabaseAdminClient> {
+  if (!_verifiedSupabaseAdmin) {
+    _verifiedSupabaseAdmin = (async () => {
+      const { adminKeys, hasPublishableKey, keyCandidateSources, supabaseUrl } =
+        getSupabaseServerConfiguration();
+
+      if (adminKeys.length === 0) {
+        throw new SupabaseAdminKeyConfigurationError(
+          hasPublishableKey
+            ? "Les variables serveur Supabase contiennent une clé publishable/anon au lieu d’une Secret key ou service_role key."
+            : "Aucune Secret key Supabase valide n’est configurée sur le serveur.",
+        );
+      }
+
+      const rejectedSources: string[] = [];
+
+      for (const adminKey of adminKeys) {
+        const client = createSupabaseAdminClient(adminKey, supabaseUrl);
+        const { error } = await client.from("site_settings").select("id", { head: true }).limit(1);
+
+        if (!isInvalidSupabaseApiKeyError(error)) {
+          return client;
+        }
+
+        rejectedSources.push(adminKey.source);
+      }
+
+      console.error(
+        `[Supabase admin] rejected elevated key variables: ${rejectedSources.join(", ")}; checked: ${keyCandidateSources.join(", ") || "none"}`,
+      );
+      throw new SupabaseAdminKeyConfigurationError(
+        "Aucune des clés serveur Supabase configurées n’est acceptée par ce projet.",
+      );
+    })().catch((error: unknown) => {
+      _verifiedSupabaseAdmin = undefined;
+      throw error;
+    });
+  }
+
+  return _verifiedSupabaseAdmin;
+}
+
+// Kept for backward compatibility with unused legacy server functions. New code uses
+// getVerifiedSupabaseAdminClient() so it can reject stale environment variables safely.
+export const supabaseAdmin = new Proxy({} as SupabaseAdminClient, {
   get(_, prop) {
     if (!_supabaseAdmin) {
-      _supabaseAdmin = createSupabaseAdminClient();
+      const { adminKeys, hasPublishableKey, supabaseUrl } = getSupabaseServerConfiguration();
+      const adminKey = adminKeys[0];
+
+      if (!adminKey) {
+        throw new SupabaseAdminKeyConfigurationError(
+          hasPublishableKey
+            ? "Les variables serveur Supabase contiennent une clé publishable/anon au lieu d’une Secret key ou service_role key."
+            : "Aucune Secret key Supabase valide n’est configurée sur le serveur.",
+        );
+      }
+
+      _supabaseAdmin = createSupabaseAdminClient(adminKey, supabaseUrl);
     }
 
     const value = Reflect.get(_supabaseAdmin, prop, _supabaseAdmin);
