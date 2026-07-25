@@ -105,23 +105,10 @@ export async function getAdminDashboard(): Promise<{
   screenings: Screening[];
   settings: SiteSettings | null;
 }> {
-  const [settingsResult, screeningsResult] = await Promise.all([
-    supabase.from("site_settings").select("*").eq("id", 1).maybeSingle(),
-    supabase.from("screenings").select("*").order("created_at", { ascending: false }),
-  ]);
-
-  if (settingsResult.error) {
-    throw settingsResult.error;
-  }
-
-  if (screeningsResult.error) {
-    throw screeningsResult.error;
-  }
-
-  return {
-    screenings: screeningsResult.data ?? [],
-    settings: settingsResult.data,
-  };
+  return callAdminApi<{ screenings: Screening[]; settings: SiteSettings | null }>(
+    "getDashboard",
+    {},
+  );
 }
 
 export async function getAdminScreeningContent({
@@ -134,27 +121,7 @@ export async function getAdminScreeningContent({
   options: PollOption[];
   votes: Vote[];
 }> {
-  const [optionsResult, votesResult] = await Promise.all([
-    supabase
-      .from("poll_options")
-      .select("*")
-      .eq("screening_id", data.screeningId)
-      .order("created_at"),
-    supabase.from("votes").select("*").eq("screening_id", data.screeningId),
-  ]);
-
-  if (optionsResult.error) {
-    throw optionsResult.error;
-  }
-
-  if (votesResult.error) {
-    throw votesResult.error;
-  }
-
-  return {
-    options: optionsResult.data ?? [],
-    votes: votesResult.data ?? [],
-  };
+  return callAdminApi<{ options: PollOption[]; votes: Vote[] }>("getScreeningContent", data);
 }
 
 export async function saveAdminScreening({

@@ -1,6 +1,11 @@
 import { z } from "zod";
 
-import { supabaseAdmin, verifySupabaseAccessToken } from "@/integrations/supabase/client.server";
+import {
+  createSupabaseAuthenticatedClient,
+  getVerifiedSupabaseAdminClient,
+  SupabaseAdminKeyConfigurationError,
+  verifySupabaseAccessToken,
+} from "@/integrations/supabase/client.server";
 
 const uuidSchema = z.string().uuid();
 const nullableShortText = z.string().trim().max(500).nullable();
@@ -46,6 +51,16 @@ const moviePayloadSchema = z.object({
 });
 
 const adminActionSchema = z.discriminatedUnion("action", [
+  z.object({
+    action: z.literal("getDashboard"),
+    data: z.object({}),
+  }),
+  z.object({
+    action: z.literal("getScreeningContent"),
+    data: z.object({
+      screeningId: uuidSchema,
+    }),
+  }),
   z.object({
     action: z.literal("saveScreening"),
     data: z.object({
@@ -115,7 +130,7 @@ function requireRecord<T>(data: T | null, message: string): T {
   return data;
 }
 
-async function requireAuthenticatedUser(authorization: string | null) {
+async function requireAuthenticatedUser(authorization: string | null): Promise<string> {
   if (!authorization?.startsWith("Bearer ")) {
     throw new Error("Session administrateur absente. Déconnecte-toi puis reconnecte-toi.");
   }
@@ -126,7 +141,23 @@ async function requireAuthenticatedUser(authorization: string | null) {
     throw new Error("Session administrateur invalide. Déconnecte-toi puis reconnecte-toi.");
   }
 
-  return verifySupabaseAccessToken(accessToken);
+  await verifySupabaseAccessToken(accessToken);
+  return accessToken;
+}
+
+async function getAdminDatabaseClient(accessToken: string) {
+  try {
+    return await getVerifiedSupabaseAdminClient();
+  } catch (error) {
+    if (!(error instanceof SupabaseAdminKeyConfigurationError)) {
+      throw error;
+    }
+
+    // The project policy intentionally grants administration to every authenticated
+    // account. This keeps the panel usable when a stale Vercel server key is present.
+    console.warn("[Supabase admin] falling back to the verified authenticated user session.");
+    return createSupabaseAuthenticatedClient(accessToken);
+  }
 }
 
 export async function handleAdminAction({
@@ -136,11 +167,56 @@ export async function handleAdminAction({
   authorization: string | null;
   body: unknown;
 }) {
-  await requireAuthenticatedUser(authorization);
+  const accessToken = await requireAuthenticatedUser(authorization);
+  const supabaseAdmin = await getAdminDatabaseClient(accessToken);
 
   const payload = adminActionSchema.parse(body);
 
   switch (payload.action) {
+    case "getDashboard": {
+      const [settingsResult, screeningsResult] = await Promise.all([
+        supabaseAdmin.from("site_settings").select("*").eq("id", 1).maybeSingle(),
+        supabaseAdmin.from("screenings").select("*").order("created_at", { ascending: false }),
+      ]);
+
+      if (settingsResult.error) {
+        throw settingsResult.error;
+      }
+
+      if (screeningsResult.error) {
+        throw screeningsResult.error;
+      }
+
+      return {
+        screenings: screeningsResult.data ?? [],
+        settings: settingsResult.data,
+      };
+    }
+
+    case "getScreeningContent": {
+      const [optionsResult, votesResult] = await Promise.all([
+        supabaseAdmin
+          .from("poll_options")
+          .select("*")
+          .eq("screening_id", payload.data.screeningId)
+          .order("created_at"),
+        supabaseAdmin.from("votes").select("*").eq("screening_id", payload.data.screeningId),
+      ]);
+
+      if (optionsResult.error) {
+        throw optionsResult.error;
+      }
+
+      if (votesResult.error) {
+        throw votesResult.error;
+      }
+
+      return {
+        options: optionsResult.data ?? [],
+        votes: votesResult.data ?? [],
+      };
+    }
+
     case "saveScreening": {
       const { poll_closes_at: pollClosesAt, poll_opens_at: pollOpensAt } = payload.data.screening;
 

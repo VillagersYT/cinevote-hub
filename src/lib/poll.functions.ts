@@ -104,9 +104,9 @@ async function getValidatedMovie(tmdbId: number): Promise<MoviePick> {
 }
 
 async function getSupabaseAdmin() {
-  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const { getVerifiedSupabaseAdminClient } = await import("@/integrations/supabase/client.server");
 
-  return supabaseAdmin;
+  return getVerifiedSupabaseAdminClient();
 }
 
 async function getOrCreateVoterId(): Promise<string> {
