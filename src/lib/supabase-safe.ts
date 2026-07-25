@@ -1,6 +1,20 @@
+const fallbackErrorMessage =
+  "Une erreur serveur est survenue. Réessaie dans un instant.";
+
+function normaliseErrorMessage(message: string): string {
+  const trimmed = message.trim();
+
+  // Ne jamais afficher le HTML complet d'une page d'erreur dans une notification.
+  if (/^<!doctype html/i.test(trimmed) || /^<html[\s>]/i.test(trimmed)) {
+    return fallbackErrorMessage;
+  }
+
+  return trimmed || fallbackErrorMessage;
+}
+
 export function getErrorMessage(error: unknown): string {
   if (error instanceof Error) {
-    return error.message;
+    return normaliseErrorMessage(error.message);
   }
 
   if (
@@ -9,10 +23,10 @@ export function getErrorMessage(error: unknown): string {
     "message" in error &&
     typeof (error as { message?: unknown }).message === "string"
   ) {
-    return (error as { message: string }).message;
+    return normaliseErrorMessage((error as { message: string }).message);
   }
 
-  return "Erreur inconnue.";
+  return fallbackErrorMessage;
 }
 
 export async function withTimeout<T>(
