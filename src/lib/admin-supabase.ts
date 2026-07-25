@@ -35,20 +35,54 @@ type SettingsPayload = Pick<
   | "tagline"
 >;
 
-type PostgrestFailure = {
-  message: string;
+type AdminApiResponse<T> = {
+  data?: T;
+  error?: string;
 };
 
-function requireData<T>(data: T | null, error: PostgrestFailure | null, message: string): T {
-  if (error) {
-    throw error;
+async function callAdminApi<T>(action: string, data: unknown): Promise<T> {
+  const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+  const accessToken = sessionData.session?.access_token;
+
+  if (sessionError || !accessToken) {
+    throw new Error(
+      "Session administrateur absente ou expirée. Déconnecte-toi puis reconnecte-toi.",
+    );
   }
 
-  if (data === null) {
-    throw new Error(message);
+  const response = await fetch("/api/admin", {
+    method: "POST",
+    headers: {
+      accept: "application/json",
+      authorization: `Bearer ${accessToken}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({ action, data }),
+    cache: "no-store",
+  });
+
+  const responseText = await response.text();
+  let payload: AdminApiResponse<T>;
+
+  try {
+    payload = JSON.parse(responseText) as AdminApiResponse<T>;
+  } catch {
+    throw new Error(
+      response.ok
+        ? "Le serveur administrateur a renvoyé une réponse invalide."
+        : `Le serveur administrateur est indisponible (HTTP ${response.status}).`,
+    );
   }
 
-  return data;
+  if (!response.ok || payload.error) {
+    throw new Error(payload.error || `L’action administrateur a échoué (HTTP ${response.status}).`);
+  }
+
+  if (!Object.prototype.hasOwnProperty.call(payload, "data")) {
+    throw new Error("Le serveur administrateur n’a renvoyé aucune donnée.");
+  }
+
+  return payload.data as T;
 }
 
 export async function getAdminDashboard(): Promise<{
@@ -115,20 +149,7 @@ export async function saveAdminScreening({
     screeningId: string | null;
   };
 }): Promise<string> {
-  if (data.screeningId) {
-    const result = await supabase
-      .from("screenings")
-      .update(data.screening)
-      .eq("id", data.screeningId)
-      .select("id")
-      .maybeSingle();
-
-    return requireData(result.data, result.error, "Cette séance n’existe plus.").id;
-  }
-
-  const result = await supabase.from("screenings").insert(data.screening).select("id").single();
-
-  return requireData(result.data, result.error, "La séance n’a pas été créée.").id;
+  return callAdminApi<string>("saveScreening", data);
 }
 
 export async function deleteAdminScreening({
@@ -138,14 +159,7 @@ export async function deleteAdminScreening({
     screeningId: string;
   };
 }): Promise<string> {
-  const result = await supabase
-    .from("screenings")
-    .delete()
-    .eq("id", data.screeningId)
-    .select("id")
-    .maybeSingle();
-
-  return requireData(result.data, result.error, "Cette séance n’existe plus.").id;
+  return callAdminApi<string>("deleteScreening", data);
 }
 
 export async function duplicateAdminScreening({
@@ -155,33 +169,7 @@ export async function duplicateAdminScreening({
     screeningId: string;
   };
 }): Promise<string> {
-  const sourceResult = await supabase
-    .from("screenings")
-    .select("*")
-    .eq("id", data.screeningId)
-    .maybeSingle();
-  const source = requireData(sourceResult.data, sourceResult.error, "Cette séance n’existe plus.");
-
-  const createdResult = await supabase
-    .from("screenings")
-    .insert({
-      allow_public_proposals: source.allow_public_proposals,
-      cover_url: source.cover_url,
-      description: source.description,
-      location: source.location,
-      max_proposals_per_voter: source.max_proposals_per_voter,
-      poll_closes_at: null,
-      poll_opens_at: null,
-      scheduled_at: null,
-      status: "closed",
-      title: `${source.title} — copie`,
-      votes_per_voter: source.votes_per_voter,
-      winner_movie_id: null,
-    })
-    .select("id")
-    .single();
-
-  return requireData(createdResult.data, createdResult.error, "La copie n’a pas été créée.").id;
+  return callAdminApi<string>("duplicateScreening", data);
 }
 
 export async function updateAdminScreeningStatus({
@@ -192,16 +180,7 @@ export async function updateAdminScreeningStatus({
     status: "open" | "closed" | "finished";
   };
 }): Promise<{ success: true }> {
-  const result = await supabase
-    .from("screenings")
-    .update({ status: data.status })
-    .eq("id", data.screeningId)
-    .select("id")
-    .maybeSingle();
-
-  requireData(result.data, result.error, "Cette séance n’existe plus.");
-
-  return { success: true };
+  return callAdminApi<{ success: true }>("updateScreeningStatus", data);
 }
 
 export async function saveAdminSettings({
@@ -211,18 +190,7 @@ export async function saveAdminSettings({
     settings: SettingsPayload;
   };
 }): Promise<{ success: true }> {
-  const result = await supabase
-    .from("site_settings")
-    .upsert({
-      ...data.settings,
-      id: 1,
-    })
-    .select("id")
-    .single();
-
-  requireData(result.data, result.error, "Les réglages n’ont pas été enregistrés.");
-
-  return { success: true };
+  return callAdminApi<{ success: true }>("saveSettings", data);
 }
 
 export async function addAdminMovie({
@@ -233,31 +201,7 @@ export async function addAdminMovie({
     screeningId: string;
   };
 }): Promise<{ success: true }> {
-  const result = await supabase
-    .from("poll_options")
-    .insert({
-      backdrop_path: data.movie.backdrop_path,
-      original_title: data.movie.original_title,
-      overview: data.movie.overview,
-      poster_path: data.movie.poster_path,
-      proposer_name: "Administration",
-      proposer_voter_id: null,
-      release_year: data.movie.release_year,
-      runtime: data.movie.runtime,
-      screening_id: data.screeningId,
-      title: data.movie.title,
-      tmdb_id: data.movie.id,
-    })
-    .select("id")
-    .single();
-
-  if (result.error?.code === "23505") {
-    throw new Error("Ce film est déjà présent dans cette séance.");
-  }
-
-  requireData(result.data, result.error, "Le film n’a pas été ajouté.");
-
-  return { success: true };
+  return callAdminApi<{ success: true }>("addMovie", data);
 }
 
 export async function deleteAdminOption({
@@ -268,45 +212,7 @@ export async function deleteAdminOption({
     screeningId: string;
   };
 }): Promise<{ success: true }> {
-  const optionResult = await supabase
-    .from("poll_options")
-    .select("id, tmdb_id")
-    .eq("id", data.optionId)
-    .eq("screening_id", data.screeningId)
-    .maybeSingle();
-  const option = requireData(optionResult.data, optionResult.error, "Ce film n’existe plus dans cette séance.");
-
-  const deleteResult = await supabase
-    .from("poll_options")
-    .delete()
-    .eq("id", option.id)
-    .select("id")
-    .maybeSingle();
-
-  requireData(deleteResult.data, deleteResult.error, "Ce film n’existe plus dans cette séance.");
-
-  const screeningResult = await supabase
-    .from("screenings")
-    .select("winner_movie_id")
-    .eq("id", data.screeningId)
-    .maybeSingle();
-
-  if (screeningResult.error) {
-    throw screeningResult.error;
-  }
-
-  if (screeningResult.data?.winner_movie_id === option.tmdb_id) {
-    const clearWinnerResult = await supabase
-      .from("screenings")
-      .update({ winner_movie_id: null })
-      .eq("id", data.screeningId)
-      .select("id")
-      .maybeSingle();
-
-    requireData(clearWinnerResult.data, clearWinnerResult.error, "Cette séance n’existe plus.");
-  }
-
-  return { success: true };
+  return callAdminApi<{ success: true }>("deleteOption", data);
 }
 
 export async function setAdminWinner({
@@ -317,27 +223,7 @@ export async function setAdminWinner({
     tmdbId: number | null;
   };
 }): Promise<{ success: true }> {
-  if (data.tmdbId !== null) {
-    const optionResult = await supabase
-      .from("poll_options")
-      .select("id")
-      .eq("screening_id", data.screeningId)
-      .eq("tmdb_id", data.tmdbId)
-      .maybeSingle();
-
-    requireData(optionResult.data, optionResult.error, "Ce film ne fait pas partie de cette séance.");
-  }
-
-  const result = await supabase
-    .from("screenings")
-    .update({ winner_movie_id: data.tmdbId })
-    .eq("id", data.screeningId)
-    .select("id")
-    .maybeSingle();
-
-  requireData(result.data, result.error, "Cette séance n’existe plus.");
-
-  return { success: true };
+  return callAdminApi<{ success: true }>("setWinner", data);
 }
 
 export async function resetAdminVotes({
@@ -347,15 +233,5 @@ export async function resetAdminVotes({
     screeningId: string;
   };
 }): Promise<{ success: true }> {
-  const result = await supabase
-    .from("votes")
-    .delete()
-    .eq("screening_id", data.screeningId)
-    .select("id");
-
-  if (result.error) {
-    throw result.error;
-  }
-
-  return { success: true };
+  return callAdminApi<{ success: true }>("resetVotes", data);
 }
