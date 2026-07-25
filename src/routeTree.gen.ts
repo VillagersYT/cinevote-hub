@@ -14,6 +14,7 @@ import { Route as AdminRouteImport } from './routes/admin'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as DebugRouteImport } from './routes/debug'
 import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
+import { Route as ApiAdminRouteImport } from './routes/api.admin'
 import { Route as ScreeningsIdRouteImport } from './routes/screenings.$id'
 import { Route as ScreeningsIdResultsRouteImport } from './routes/screenings.$id.results'
 
@@ -42,6 +43,11 @@ const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
   path: '/sitemap.xml',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiAdminRoute = ApiAdminRouteImport.update({
+  id: '/api/admin',
+  path: '/api/admin',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ScreeningsIdRoute = ScreeningsIdRouteImport.update({
   id: '/screenings/$id',
   path: '/screenings/$id',
@@ -59,6 +65,7 @@ export interface FileRoutesByFullPath {
   '/auth': typeof AuthRoute
   '/debug': typeof DebugRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/api/admin': typeof ApiAdminRoute
   '/screenings/$id': typeof ScreeningsIdRouteWithChildren
   '/screenings/$id/results': typeof ScreeningsIdResultsRoute
 }
@@ -68,6 +75,7 @@ export interface FileRoutesByTo {
   '/auth': typeof AuthRoute
   '/debug': typeof DebugRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/api/admin': typeof ApiAdminRoute
   '/screenings/$id': typeof ScreeningsIdRouteWithChildren
   '/screenings/$id/results': typeof ScreeningsIdResultsRoute
 }
@@ -78,6 +86,7 @@ export interface FileRoutesById {
   '/auth': typeof AuthRoute
   '/debug': typeof DebugRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/api/admin': typeof ApiAdminRoute
   '/screenings/$id': typeof ScreeningsIdRouteWithChildren
   '/screenings/$id/results': typeof ScreeningsIdResultsRoute
 }
@@ -89,6 +98,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/debug'
     | '/sitemap.xml'
+    | '/api/admin'
     | '/screenings/$id'
     | '/screenings/$id/results'
   fileRoutesByTo: FileRoutesByTo
@@ -98,6 +108,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/debug'
     | '/sitemap.xml'
+    | '/api/admin'
     | '/screenings/$id'
     | '/screenings/$id/results'
   id:
@@ -107,6 +118,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/debug'
     | '/sitemap.xml'
+    | '/api/admin'
     | '/screenings/$id'
     | '/screenings/$id/results'
   fileRoutesById: FileRoutesById
@@ -117,6 +129,7 @@ export interface RootRouteChildren {
   AuthRoute: typeof AuthRoute
   DebugRoute: typeof DebugRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
+  ApiAdminRoute: typeof ApiAdminRoute
   ScreeningsIdRoute: typeof ScreeningsIdRouteWithChildren
 }
 
@@ -157,6 +170,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SitemapDotxmlRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/admin': {
+      id: '/api/admin'
+      path: '/api/admin'
+      fullPath: '/api/admin'
+      preLoaderRoute: typeof ApiAdminRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/screenings/$id': {
       id: '/screenings/$id'
       path: '/screenings/$id'
@@ -192,6 +212,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthRoute: AuthRoute,
   DebugRoute: DebugRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
+  ApiAdminRoute: ApiAdminRoute,
   ScreeningsIdRoute: ScreeningsIdRouteWithChildren,
 }
 export const routeTree = rootRouteImport
